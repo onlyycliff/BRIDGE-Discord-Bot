@@ -16,7 +16,11 @@ async def send_poll(question, option1, option2):
     channel = bot.get_channel(CHANNEL_ID)
     
     if channel:
-        await channel.send(f"📊 {question}\n\n1️⃣ {option1}\n2️⃣ {option2}")
+        msg = await channel.send(f"📊 {question}\n\n1️⃣  {option1}\n2️⃣  {option2}")
+        
+        await msg.add_reaction("1️⃣")
+        await msg.add_reaction("2️⃣")
+        
 
 RULES_CHANNEL_NAME = "📜｜rules"  # Change this if your channel is named differently
 GOLD = 0xFFD700
