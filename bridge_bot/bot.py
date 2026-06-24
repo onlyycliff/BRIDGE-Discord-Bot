@@ -1,3 +1,5 @@
+import pandas as pd
+from datetime import date, datetime
 import discord
 from discord.ext import commands
 from discord.ui import Button, View
@@ -30,6 +32,24 @@ class PollView(View):
     
     async def handle_vote(self, interaction, choice):
         await interaction.response.send_message(f"You voted for {choice}", ephemeral=True)
+        
+        data = {
+            "User": str(interaction.user.display_name), "Choice": str(choice), "Question": self.question
+            }
+        
+        df = pd.DataFrame([data])
+        
+        try:
+            existing = pd.read_excel("responses.xlsx")
+            df = pd.concat([existing, df], ignore_index=True)
+        except FileNotFoundError:
+            pass
+        
+        df.to_excel("responses.xlsx", index=False)
+        
+        print("Saved:", data)
+        
+        df.to_excel("responses.xlsx", index=False)
         print(f"user: {str(interaction.user.display_name)},\n choice: {str(choice)},\n question: {self.question}")
 
 # Define the buttons for the poll
