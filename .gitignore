@@ -1,2 +1,4 @@
 .env
 bridge_bot/.env
+__pycache__/
+*.pyc

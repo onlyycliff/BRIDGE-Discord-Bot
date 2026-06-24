@@ -6,7 +6,17 @@ import os
 load_dotenv()
 
 intents = discord.Intents.default()
+intents.message_content = True
+
 bot = commands.Bot(command_prefix="!", intents=intents)
+
+CHANNEL_ID = 1519291160240066650
+
+async def send_poll(question, option1, option2):
+    channel = bot.get_channel(CHANNEL_ID)
+    
+    if channel:
+        await channel.send(f"📊 {question}\n\n1️⃣ {option1}\n2️⃣ {option2}")
 
 RULES_CHANNEL_NAME = "📜｜rules"  # Change this if your channel is named differently
 GOLD = 0xFFD700
@@ -128,4 +138,5 @@ async def on_ready():
         else:
             print(f"Could not find channel '{RULES_CHANNEL_NAME}'")
 
-bot.run(os.getenv("TOKEN"))
+def start_bot():
+    bot.run(os.getenv("TOKEN"))
