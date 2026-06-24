@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from discord.ui import Button, View
 from dotenv import load_dotenv
 import os
 
@@ -14,14 +15,30 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 CHANNEL_ID = 1519291160240066650
 
+class PollView(View):
+    def __init__(self, question, option1, option2):
+        super().__init__()
+        self.question = question
+        self.option1 = option1
+        self.option2 = option2
+
+    @discord.ui.button(label="Option 1", style=discord.ButtonStyle.primary)
+    async def option1_button(self, interaction: discord.Interaction, button: Button):
+        await interaction.response.send_message(f"You voted for {self.option1}", ephemeral=True)
+        print(f"user: {str(interaction.user)},\n choice: {str(self.option1)},\n question: {self.question}")
+
+    @discord.ui.button(label="Option 2", style=discord.ButtonStyle.primary)
+    async def option2_button(self, interaction: discord.Interaction, button: Button):
+        await interaction.response.send_message(f"You voted for {self.option2}", ephemeral=True)
+        print(f"user: {str(interaction.user)},\n choice: {str(self.option2)},\n question: {self.question}")
+
 async def send_poll(question, option1, option2):
     channel = bot.get_channel(CHANNEL_ID)
     
     if channel:
-        msg = await channel.send(f"📊 {question}\n\n1️⃣  {option1}\n2️⃣  {option2}")
-        
-        await msg.add_reaction("1️⃣")
-        await msg.add_reaction("2️⃣")
+        view = PollView(question, option1, option2)
+        await channel.send(f"📊 {question}\n\n1️⃣  {option1}\n2️⃣  {option2}", view=view)
+
         
 
 RULES_CHANNEL_NAME = "📜｜rules"  # Change this if your channel is named differently
