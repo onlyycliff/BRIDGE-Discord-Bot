@@ -8,6 +8,8 @@ load_dotenv()
 intents = discord.Intents.default()
 intents.message_content = True
 
+user_votes = {}
+
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 CHANNEL_ID = 1519291160240066650
@@ -142,5 +144,33 @@ async def on_ready():
         else:
             print(f"Could not find channel '{RULES_CHANNEL_NAME}'")
 
+@bot.event
+async def on_reaction_add(reaction, user):
+    if user == bot.user:
+        return
+    
+    message = reaction.message
+    
+    if message.author != bot.user:
+        return
+    
+    if "📊" not in message.content:
+        return
+    
+    user_id = user.id
+    message_id = message.id
+    
+    #Creates a dictionary to store user votes
+    if message_id not in user_votes:
+        user_votes[message_id] = {}
+        
+    if user_id in user_votes[message_id]:
+        print(f"User {user_id} has already voted on message {message_id}")
+        return
+
+    user_votes[message_id][user_id] = str(reaction.emoji)
+
+    print(f"user: {str(user)},\n reaction: {str(reaction.emoji)},\n message: {message.content}")
+    
 def start_bot():
     bot.run(os.getenv("TOKEN"))
