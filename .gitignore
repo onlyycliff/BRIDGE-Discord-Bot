@@ -3,3 +3,4 @@ bridge_bot/.env
 __pycache__/
 *.pyc
 responses.xlsx
+~$responses.xlsx
