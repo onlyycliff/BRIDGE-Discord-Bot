@@ -37,7 +37,6 @@ class PollView(View):
     async def handle_vote(self, interaction, choice):
         user_id = interaction.user.id
         
-        #Create poll tracking settings if not existing
         user_votes.setdefault(self.poll_id, set())
         
         if user_id in user_votes[self.poll_id]:
@@ -46,7 +45,13 @@ class PollView(View):
 
         user_votes[self.poll_id].add(user_id)
         
-        await interaction.response.send_message(f"You voted for {choice}", ephemeral=True)
+        await interaction.response.send_message(f"You voted for **{choice}**", ephemeral=True)
+         
+        for item in self.children:
+            item.disabled = True
+        
+        await interaction.message.edit(view=self)
+        
         
         data = {
             "Poll ID": self.poll_id,
@@ -74,7 +79,7 @@ class PollView(View):
     async def option1_button(self, interaction: discord.Interaction, button: Button):
         await self.handle_vote(interaction, self.option1)
 
-    @discord.ui.button(label="temp2", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="temp2", style=discord.ButtonStyle.success)
     async def option2_button(self, interaction: discord.Interaction, button: Button):
         await self.handle_vote(interaction, self.option2)
 
@@ -85,7 +90,12 @@ async def send_poll(question, option1, option2):
     if channel:
         view = PollView(question, option1, option2)
         
-        await channel.send(f"📊 {question}", view=view)
+        embed = discord.Embed(
+            title="📊 Poll",
+            description=f"{question}",
+            color = 0xFFD700
+        )
+        await channel.send(embed=embed, view=view)
 
         
 
