@@ -6,6 +6,7 @@ import os
 
 load_dotenv()
 
+# Initialize the bot with the required intents
 intents = discord.Intents.default()
 intents.message_content = True
 
@@ -15,23 +16,30 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 CHANNEL_ID = 1519291160240066650
 
+# Create a view for the poll
 class PollView(View):
     def __init__(self, question, option1, option2):
         super().__init__()
         self.question = question
         self.option1 = option1
         self.option2 = option2
+        
+        #Update button labels depending on the question
+        self.children[0].label = option1
+        self.children[1].label = option2
 
-    @discord.ui.button(label="Option 1", style=discord.ButtonStyle.primary)
+# Define the buttons for the poll
+    @discord.ui.button(label="temp1", style=discord.ButtonStyle.primary)
     async def option1_button(self, interaction: discord.Interaction, button: Button):
         await interaction.response.send_message(f"You voted for {self.option1}", ephemeral=True)
         print(f"user: {str(interaction.user)},\n choice: {str(self.option1)},\n question: {self.question}")
 
-    @discord.ui.button(label="Option 2", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="temp2", style=discord.ButtonStyle.primary)
     async def option2_button(self, interaction: discord.Interaction, button: Button):
         await interaction.response.send_message(f"You voted for {self.option2}", ephemeral=True)
         print(f"user: {str(interaction.user)},\n choice: {str(self.option2)},\n question: {self.question}")
 
+# Send a poll to the specified channel
 async def send_poll(question, option1, option2):
     channel = bot.get_channel(CHANNEL_ID)
     
