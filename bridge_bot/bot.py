@@ -1,5 +1,6 @@
 import pandas as pd
-from datetime import date, datetime
+from datetime import datetime
+import time
 import discord
 from discord.ext import commands
 from discord.ui import Button, View
@@ -26,16 +27,35 @@ class PollView(View):
         self.option1 = option1
         self.option2 = option2
         
+        # Generate a unique poll ID
+        self.poll_id = int(time.time())
+        
         #Update button labels depending on the question
         self.children[0].label = option1
         self.children[1].label = option2
     
     async def handle_vote(self, interaction, choice):
+        user_id = interaction.user.id
+        
+        #Create poll tracking settings if not existing
+        user_votes.setdefault(self.poll_id, set())
+        
+        if user_id in user_votes[self.poll_id]:
+            await interaction.response.send_message("You have already voted in this poll.", ephemeral=True)
+            return
+
+        user_votes[self.poll_id].add(user_id)
+        
         await interaction.response.send_message(f"You voted for {choice}", ephemeral=True)
         
         data = {
-            "User": str(interaction.user.display_name), "Choice": str(choice), "Question": self.question
-            }
+            "Poll ID": self.poll_id,
+            "User": str(interaction.user.display_name),
+            "User_ID": user_id,
+            "Choice": str(choice),
+            "Question": self.question,
+            "Time": datetime.now()
+        }
         
         df = pd.DataFrame([data])
         
@@ -49,9 +69,6 @@ class PollView(View):
         
         print("Saved:", data)
         
-        df.to_excel("responses.xlsx", index=False)
-        print(f"user: {str(interaction.user.display_name)},\n choice: {str(choice)},\n question: {self.question}")
-
 # Define the buttons for the poll
     @discord.ui.button(label="temp1", style=discord.ButtonStyle.primary)
     async def option1_button(self, interaction: discord.Interaction, button: Button):
