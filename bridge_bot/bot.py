@@ -27,17 +27,19 @@ class PollView(View):
         #Update button labels depending on the question
         self.children[0].label = option1
         self.children[1].label = option2
+    
+    async def handle_vote(self, interaction, choice):
+        await interaction.response.send_message(f"You voted for {choice}", ephemeral=True)
+        print(f"user: {str(interaction.user.display_name)},\n choice: {str(choice)},\n question: {self.question}")
 
 # Define the buttons for the poll
     @discord.ui.button(label="temp1", style=discord.ButtonStyle.primary)
     async def option1_button(self, interaction: discord.Interaction, button: Button):
-        await interaction.response.send_message(f"You voted for {self.option1}", ephemeral=True)
-        print(f"user: {str(interaction.user)},\n choice: {str(self.option1)},\n question: {self.question}")
+        await self.handle_vote(interaction, self.option1)
 
     @discord.ui.button(label="temp2", style=discord.ButtonStyle.primary)
     async def option2_button(self, interaction: discord.Interaction, button: Button):
-        await interaction.response.send_message(f"You voted for {self.option2}", ephemeral=True)
-        print(f"user: {str(interaction.user)},\n choice: {str(self.option2)},\n question: {self.question}")
+        await self.handle_vote(interaction, self.option2)
 
 # Send a poll to the specified channel
 async def send_poll(question, option1, option2):
