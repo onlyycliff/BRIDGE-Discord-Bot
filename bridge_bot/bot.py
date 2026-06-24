@@ -47,7 +47,8 @@ async def send_poll(question, option1, option2):
     
     if channel:
         view = PollView(question, option1, option2)
-        await channel.send(f"📊 {question}\n\n1️⃣  {option1}\n2️⃣  {option2}", view=view)
+        
+        await channel.send(f"📊 {question}", view=view)
 
         
 
