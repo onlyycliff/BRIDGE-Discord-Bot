@@ -3,13 +3,13 @@ from bridge_bot.bot import send_poll, start_bot, bot
 import threading
 import asyncio
 
-app = Flask(__name__)
+dashboard = Flask(__name__)
 
-@app.route('/')
+@dashboard.route('/')
 def home():
     return render_template('index.html')
 
-@app.route('/submit', methods=["POST"])
+@dashboard.route('/submit', methods=["POST"])
 def submit():
     data = request.get_json()
     question = data["question"]
@@ -42,5 +42,5 @@ def run_bot():
 
 if __name__ == '__main__':
     threading.Thread(target=run_bot).start()
-    app.run(debug=False)
+    dashboard.run(debug=False)
     

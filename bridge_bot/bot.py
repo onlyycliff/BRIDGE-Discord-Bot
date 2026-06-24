@@ -27,6 +27,11 @@ class PollView(View):
         self.option1 = option1
         self.option2 = option2
         
+        self.votes = {
+            option1: 0,
+            option2: 0
+        }
+        
         # Generate a unique poll ID
         self.poll_id = int(time.time())
         
@@ -45,12 +50,24 @@ class PollView(View):
 
         user_votes[self.poll_id].add(user_id)
         
-        await interaction.response.send_message(f"You voted for **{choice}**", ephemeral=True)
-         
-        for item in self.children:
-            item.disabled = True
+        self.votes[choice] += 1
         
-        await interaction.message.edit(view=self)
+        embed = interaction.message.embeds[0]
+        
+        embed.set_field_at(
+            index=0,
+            name=f"🔹 {self.option1}",
+            value=f"{self.votes[self.option1]} votes",
+            inline=True
+        )
+        embed.set_field_at(
+            index=1,
+            name=f"🔸 {self.option2}",
+            value=f"{self.votes[self.option2]} votes",
+            inline=True
+        )
+        
+        await interaction.response.send_message(f"You voted for **{choice}**", ephemeral=True)
         
         
         data = {
@@ -70,8 +87,19 @@ class PollView(View):
         except FileNotFoundError:
             pass
         
-        df.to_excel("responses.xlsx", index=False)
+        file_path = "responses.xlsx"
         
+        #Limit sheet name to 31 chars (Excel rule)
+        sheet_name = f"{self.question[:31]}-{self.poll_id}"
+        
+        
+        try:
+            with pd.ExcelWriter(file_path, mode='a', engine='openpyxl', if_sheet_exists='overlay') as writer:
+                df.to_excel(writer, sheet_name=sheet_name, index=False, header=False)
+        except FileNotFoundError:
+            with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name=sheet_name, index=False, header=False)
+
         print("Saved:", data)
         
 # Define the buttons for the poll
@@ -91,10 +119,19 @@ async def send_poll(question, option1, option2):
         view = PollView(question, option1, option2)
         
         embed = discord.Embed(
-            title="📊 Poll",
-            description=f"{question}",
+            title=f"📊 {question}",
+            description=f"Vote by clicking a button below.",
             color = 0xFFD700
         )
+        
+        embed.add_field(name=f"🔹 {option1}", value="0 votes", inline=True)
+        embed.add_field(name=f"🔸 {option2}", value="0 votes", inline=True)
+        
+
+        
+        embed.set_footer(text="BRIDGE 2026 Feedback System")
+        embed.timestamp = datetime.now()
+        
         await channel.send(embed=embed, view=view)
 
         
