@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bridge 2026 Dashboard</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="logo">🌉 Bridge 2026</div>
+      
+      <nav class="nav-links">
+        <a href="#" class="nav-link active" data-section="polls" onclick="showSection('polls'); return false;">
+          📊 Poll Results
+        </a>
+        <a href="#" class="nav-link" data-section="vote-log" onclick="showSection('vote-log'); return false;">
+          📋 Vote Log
+        </a>
+        <a href="#" class="nav-link" data-section="schedule" onclick="showSection('schedule'); return false;">
+          📅 Schedule
+        </a>
+      </nav>
+      
+      <div class="sidebar-bottom">
+        <div id="bot-status-indicator" style="display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 6px; background-color: var(--color-surface-2);">
+          <div class="status-dot online"></div>
+          <span style="font-size: 0.8125rem;">Bot Online</span>
+        </div>
+        <button class="theme-toggle" onclick="toggleTheme()">
+          <span id="theme-icon">🌙</span>
+          <span style="font-size: 0.8125rem;">Theme</span>
+        </button>
+      </div>
+    </aside>
+    
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Poll Results Section -->
+      <section id="polls" class="section active">
+        <h1 class="section-title">📊 Poll Results</h1>
+        <div class="panel-grid" id="polls-container">
+          <div class="card">
+            <div class="card-title">Loading...</div>
+          </div>
+        </div>
+      </section>
+      
+      <!-- Vote Log Section -->
+      <section id="vote-log" class="section">
+        <h1 class="section-title">📋 Vote Log</h1>
+        
+        <div class="card">
+          <div class="search-bar">
+            <input type="text" id="search-input" class="search-input" placeholder="Search by username or poll question..." oninput="filterVotes()">
+            <button class="btn btn-primary" onclick="exportCSV()">📥 Export CSV</button>
+          </div>
+          
+          <div class="table-wrapper">
+            <table id="vote-log-table">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Username</th>
+                  <th>Poll Question</th>
+                  <th>Vote Choice</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td colspan="4" style="text-align: center; padding: 24px;">Loading...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          
+          <div style="margin-top: 16px; font-size: 0.8125rem; color: var(--color-text-muted);" id="sync-time">
+            Last synced: just now
+          </div>
+        </div>
+        
+        <div class="pagination" id="pagination" style="margin-top: 24px;">
+          <span id="page-info">Page 1 of 1</span>
+        </div>
+      </section>
+      
+      <!-- Schedule Section -->
+      <section id="schedule" class="section">
+        <h1 class="section-title">📅 Workshop Schedule</h1>
+        <p style="margin-bottom: 24px; color: var(--color-text-muted);">Click on any session to view full details</p>
+        
+        <div class="calendar-grid" id="schedule-container">
+          <div style="grid-column: 1 / -1; text-align: center; padding: 24px; color: var(--color-text-muted);">
+            Loading schedule...
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+  
+  <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>

@@ -69,6 +69,7 @@ class PollView(View):
         
         await interaction.response.send_message(f"You voted for **{choice}**", ephemeral=True)
         
+        await interaction.message.edit(embed=embed, view=self)
         
         data = {
             "Poll ID": self.poll_id,
