@@ -3,30 +3,44 @@ from bridge_bot.bot import send_poll, start_bot, bot
 import threading
 import asyncio
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from openpyxl import load_workbook
 import csv
 from io import StringIO
+from pathlib import Path
 
 dashboard = Flask(__name__)
 
-# Paths
-EXCEL_FILE = os.path.join(os.path.dirname(__file__), 'responses.xlsx')
+# Configuration
+BASE_DIR = Path(__file__).parent
+EXCEL_FILE = BASE_DIR / 'responses.xlsx'
 
+# Routes
 @dashboard.route('/')
 def home():
+    """Serve the main dashboard"""
     return render_template('dashboard.html')
 
 @dashboard.route('/submit', methods=["POST"])
 def submit():
-    data = request.get_json()
-    question = data["question"]
-    option1 = data["option1"]
-    option2 = data["option2"]
-    
-    bot.loop.create_task(send_poll(question, option1, option2))
-    print(data)
-    return jsonify({"message": "Data received"})
+    """Handle poll submission from frontend"""
+    try:
+        data = request.get_json()
+        if not data or 'question' not in data:
+            return jsonify({"error": "Invalid data"}), 400
+        
+        question = data.get("question")
+        option1 = data.get("option1")
+        option2 = data.get("option2")
+        
+        if not all([question, option1, option2]):
+            return jsonify({"error": "Missing required fields"}), 400
+        
+        bot.loop.create_task(send_poll(question, option1, option2))
+        return jsonify({"message": "Poll created successfully", "status": "ok"})
+    except Exception as e:
+        print(f"Error submitting poll: {e}")
+        return jsonify({"error": str(e)}), 500
 
 # API Endpoints
 
@@ -34,7 +48,7 @@ def submit():
 def get_polls():
     """Return all polls with their vote counts"""
     try:
-        if not os.path.exists(EXCEL_FILE):
+        if not EXCEL_FILE.exists():
             return jsonify([])
         
         wb = load_workbook(EXCEL_FILE)
@@ -42,15 +56,21 @@ def get_polls():
         
         polls = {}
         for row in ws.iter_rows(min_row=2, values_only=True):
-            if not row[0]:  # Skip empty rows
+            if not row[0]:
                 continue
+            
             timestamp, username, question, choice = row[:4]
             
             if question not in polls:
-                polls[question] = {'question': question, 'options': {}, 'timestamp': timestamp}
+                polls[question] = {
+                    'question': question,
+                    'options': {},
+                    'timestamp': timestamp
+                }
             
             if choice not in polls[question]['options']:
                 polls[question]['options'][choice] = {'name': choice, 'votes': 0}
+            
             polls[question]['options'][choice]['votes'] += 1
         
         result = []
@@ -67,7 +87,7 @@ def get_polls():
 def get_votes():
     """Return all votes from Excel"""
     try:
-        if not os.path.exists(EXCEL_FILE):
+        if not EXCEL_FILE.exists():
             return jsonify([])
         
         wb = load_workbook(EXCEL_FILE)
@@ -77,6 +97,7 @@ def get_votes():
         for row in ws.iter_rows(min_row=2, values_only=True):
             if not row[0]:
                 continue
+            
             timestamp, username, question, choice = row[:4]
             votes.append({
                 'timestamp': timestamp,
@@ -94,7 +115,7 @@ def get_votes():
 def export_votes():
     """Export votes as CSV"""
     try:
-        if not os.path.exists(EXCEL_FILE):
+        if not EXCEL_FILE.exists():
             return '', 204
         
         wb = load_workbook(EXCEL_FILE)
@@ -110,7 +131,10 @@ def export_votes():
             writer.writerow(row[:4])
         
         response_text = output.getvalue()
-        return response_text, 200, {'Content-Disposition': 'attachment; filename=vote-log.csv', 'Content-Type': 'text/csv'}
+        return response_text, 200, {
+            'Content-Disposition': 'attachment; filename=vote-log.csv',
+            'Content-Type': 'text/csv'
+        }
     except Exception as e:
         print(f"Error exporting votes: {e}")
         return jsonify({"error": str(e)}), 500
@@ -119,12 +143,28 @@ def export_votes():
 def get_bot_status():
     """Return bot status information"""
     try:
+        # Calculate bot stats from Excel
+        votes_today = 0
+        votes_total = 0
+        
+        if EXCEL_FILE.exists():
+            wb = load_workbook(EXCEL_FILE)
+            ws = wb.active
+            today = datetime.now().date()
+            
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                if row[0]:
+                    votes_total += 1
+                    if isinstance(row[0], datetime):
+                        if row[0].date() == today:
+                            votes_today += 1
+        
         return jsonify({
             'online': True,
             'uptime': '2d 14h 32m',
             'last_command': '/poll',
-            'votes_today': 42,
-            'votes_total': 235
+            'votes_today': votes_today,
+            'votes_total': votes_total
         })
     except Exception as e:
         print(f"Error getting bot status: {e}")
@@ -178,6 +218,7 @@ def get_schedule():
         return jsonify({"error": str(e)}), 500
 
 def run_bot():
+    """Start the Discord bot in a separate thread"""
     start_bot()
 
 
@@ -192,8 +233,7 @@ def run_bot():
 
 
 
-
 if __name__ == '__main__':
-    threading.Thread(target=run_bot).start()
-    dashboard.run(debug=False)
-    
+    bot_thread = threading.Thread(target=run_bot, daemon=True)
+    bot_thread.start()
+    dashboard.run(debug=False, port=5000)
