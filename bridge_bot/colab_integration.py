@@ -1,12 +1,16 @@
 # Google Colab Integration Module
 # Handles secure data sync and analysis without exposing credentials
 
-import requests
 import json
 import logging
 from pathlib import Path
 from datetime import datetime
 from excel_manager import excel_manager
+
+try:
+    import requests
+except ImportError:
+    requests = None
 
 logger = logging.getLogger(__name__)
 
