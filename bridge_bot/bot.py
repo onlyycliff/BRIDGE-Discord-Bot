@@ -6,14 +6,11 @@ from discord.ext import commands
 from discord.ui import Button, View
 from dotenv import load_dotenv
 import os
-import logging
-from .excel_manager import excel_manager
+from openpyxl import Workbook, load_workbook
+import openpyxl
+
 
 load_dotenv()
-
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 # Initialize the bot with the required intents
 intents = discord.Intents.default()
@@ -24,10 +21,6 @@ user_votes = {}
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 CHANNEL_ID = 1519291160240066650
-
-# Color constants
-GOLD = 0xFFD700
-NAVY = 0x2c5aa0
 
 # Create a view for the poll
 class PollView(View):
@@ -42,72 +35,45 @@ class PollView(View):
             option2: 0
         }
         
-        # Generate a unique poll ID (time complexity: O(1))
+        # Generate a unique poll ID
         self.poll_id = int(time.time())
         
-        # Update button labels (time complexity: O(1))
+        #Update button labels depending on the question
         self.children[0].label = option1
         self.children[1].label = option2
     
     async def handle_vote(self, interaction, choice):
         user_id = interaction.user.id
-        username = interaction.user.name
         
-        # Time complexity: O(1) set lookup and insertion
         user_votes.setdefault(self.poll_id, set())
         
         if user_id in user_votes[self.poll_id]:
-            await interaction.response.send_message("✋ You've already voted in this poll.", ephemeral=True)
+            await interaction.response.send_message("You have already voted in this poll.", ephemeral=True)
             return
 
         user_votes[self.poll_id].add(user_id)
+        
         self.votes[choice] += 1
         
-        # Log vote to Excel with error handling
-        success = excel_manager.add_vote(
-            username=username,
-            user_id=user_id,
-            question=self.question,
-            choice=choice,
-            poll_id=self.poll_id
-        )
-        
-        if not success:
-            logger.warning(f"Failed to log vote to Excel for user {username}")
-        
         embed = interaction.message.embeds[0]
-        total = sum(self.votes.values())
-        
-        # Calculate percentages (time complexity: O(1))
-        pct1 = (self.votes[self.option1] / total * 100) if total > 0 else 0
-        pct2 = (self.votes[self.option2] / total * 100) if total > 0 else 0
-        
-        # Determine leading option
-        leading = "🔹" if self.votes[self.option1] >= self.votes[self.option2] else "🔸"
-        
-        # Build progress bars with visual indicator
-        def make_bar(pct, is_leading=False):
-            filled = int(pct / 5)
-            prefix = "🏆 " if is_leading and total > 0 else ""
-            return f"{prefix}`{'█' * filled}{'░' * (20 - filled)}` {pct:.1f}%"
         
         embed.set_field_at(
             index=0,
-            name="🔹 Option 1",
-            value=f"`{self.option1}`\n{make_bar(pct1, leading == '🔹')}\n**{self.votes[self.option1]} votes**",
-            inline=False
+            name=f"🔹 {self.option1}",
+            value=f"{self.votes[self.option1]} votes",
+            inline=True
         )
         embed.set_field_at(
             index=1,
-            name="🔸 Option 2",
-            value=f"`{self.option2}`\n{make_bar(pct2, leading == '🔸')}\n**{self.votes[self.option2]} votes**",
-            inline=False
+            name=f"🔸 {self.option2}",
+            value=f"{self.votes[self.option2]} votes",
+            inline=True
         )
         
-        await interaction.response.send_message(f"✓ You voted for **{choice}**", ephemeral=True)
+        await interaction.response.send_message(f"You voted for **{choice}**", ephemeral=True)
+        
         await interaction.message.edit(embed=embed, view=self)
         
-        # Log vote (time complexity: O(n) for DataFrame operations, unavoidable)
         data = {
             "Poll ID": self.poll_id,
             "User": str(interaction.user.display_name),
@@ -117,23 +83,18 @@ class PollView(View):
             "Time": datetime.now()
         }
         
-        df = pd.DataFrame([data])
-        
-        try:
-            existing = pd.read_excel("responses.xlsx")
-            df = pd.concat([existing, df], ignore_index=True)
-        except FileNotFoundError:
-            pass
-        
-        file_path = "responses.xlsx"
-        sheet_name = f"{self.question[:31]}-{self.poll_id}"
-        
-        try:
-            with pd.ExcelWriter(file_path, mode='a', engine='openpyxl', if_sheet_exists='overlay') as writer:
-                df.to_excel(writer, sheet_name=sheet_name, index=False, header=False)
-        except FileNotFoundError:
-            with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
-                df.to_excel(writer, sheet_name=sheet_name, index=False, header=False)
+        def log_vote_to_excel(poll_id, question, user_display_name, user_id, choice, time):
+            if os.path.exists("responses.xlsx"):
+                workbook = load_workbook("responses.xlsx")
+            else:
+                workbook = Workbook()
+                workbook.remove(workbook.active)
+            if "Responses" not in workbook.sheetnames:
+                workbook.create_sheet("Responses")
+                workbook["Responses"].append(["Poll ID", "Question", "User", "User_ID", "Choice", "Time"])
+            
+            workbook["Responses"].append([poll_id, question, user_display_name, user_id, choice, time])
+            workbook.save("responses.xlsx")
 
         print("Saved:", data)
         
@@ -155,26 +116,21 @@ async def send_poll(question, option1, option2):
         
         embed = discord.Embed(
             title=f"📊 {question}",
-            description="**✨ Cast your vote below** — every voice matters in Bridge 2026",
-            color=GOLD
+            description=f"Vote by clicking a button below.",
+            color = 0xFFD700
         )
+       
+        embed.add_field(name=f"🔹 {option1}", value="0 votes", inline=True)
+        embed.add_field(name=f"🔸 {option2}", value="0 votes", inline=True)
         
-        embed.add_field(
-            name="🔹 Option 1",
-            value=f"`{option1}`\n█░░░░░░░░░░░░░░░░░░ 0%\n**0 votes**",
-            inline=False
-        )
-        embed.add_field(
-            name="🔸 Option 2",
-            value=f"`{option2}`\n█░░░░░░░░░░░░░░░░░░ 0%\n**0 votes**",
-            inline=False
-        )
+
         
-        embed.set_footer(text="Bridge 2026 • Community Feedback System")
+        embed.set_footer(text="BRIDGE 2026 Feedback System")
         embed.timestamp = datetime.now()
         
         await channel.send(embed=embed, view=view)
 
+        
 
 RULES_CHANNEL_NAME = "📜｜rules"  # Change this if your channel is named differently
 GOLD = 0xFFD700

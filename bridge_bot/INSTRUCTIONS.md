@@ -24,7 +24,7 @@ pip install -r requirements.txt
 
 Example:
 ```
-TOKEN=MTExMjM0NTY3ODkwMTIzNDU2.GabCde.xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TOKEN=
 ```
 
 ---
@@ -69,10 +69,3 @@ RULES_CHANNEL_NAME = "rules"  # Change this to match your channel name
 
 ---
 
-## Keeping the bot running 24/7
-Your bot only runs while your laptop is on. To keep it always online:
-1. Go to https://railway.app
-2. Create a new project → Deploy from GitHub
-3. Push your bot folder to a private GitHub repo
-4. Add your TOKEN as an environment variable in Railway
-5. Railway runs it for free 24/7
