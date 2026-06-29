@@ -7,7 +7,7 @@ from discord.ui import Button, View
 from dotenv import load_dotenv
 import os
 import logging
-from excel_manager import excel_manager
+from .excel_manager import excel_manager
 
 load_dotenv()
 
