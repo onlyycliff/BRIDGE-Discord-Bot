@@ -73,14 +73,39 @@ async function loadPollData() {
     const polls = await response.json();
     
     const container = document.getElementById('polls-container');
+    if (!container) return;
+    
     container.innerHTML = '';
     
-    polls.forEach((poll, index) => {
-      setTimeout(() => {
-        const card = createPollCard(poll);
-        container.appendChild(card);
-      }, index * 100);
+    // Calculate stats (time complexity: O(n))
+    let totalVotes = 0;
+    polls.forEach(poll => {
+      poll.options.forEach(option => {
+        totalVotes += option.votes;
+      });
     });
+    
+    // Update stat cards
+    const activePollsEl = document.getElementById('active-polls-count');
+    const totalVotesEl = document.getElementById('total-votes-count');
+    const engagementEl = document.getElementById('engagement-rate');
+    
+    if (activePollsEl) animateCounter(activePollsEl, polls.length);
+    if (totalVotesEl) animateCounter(totalVotesEl, totalVotes);
+    if (engagementEl) {
+      const engagement = polls.length > 0 ? Math.round((totalVotes / (polls.length * 100)) * 100) : 0;
+      engagementEl.textContent = Math.min(engagement, 100) + '%';
+    }
+    
+    // Render poll cards
+    const fragment = document.createDocumentFragment();
+    polls.forEach((poll, index) => {
+      const card = createPollCard(poll);
+      card.style.animationDelay = `${index * 50}ms`;
+      fragment.appendChild(card);
+    });
+    
+    container.appendChild(fragment);
   } catch (error) {
     console.error('Error loading polls:', error);
   }

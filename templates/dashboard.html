@@ -44,6 +44,23 @@
       <!-- Poll Results Section -->
       <section id="polls" class="section active">
         <h1 class="section-title">📊 Poll Results</h1>
+        
+        <!-- Live Stats Bar -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
+          <div class="stat-card">
+            <div class="stat-label">Active Polls</div>
+            <div class="stat-value" id="active-polls-count">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Total Votes</div>
+            <div class="stat-value" id="total-votes-count">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Engagement Rate</div>
+            <div class="stat-value" id="engagement-rate">0%</div>
+          </div>
+        </div>
+        
         <div class="panel-grid" id="polls-container">
           <div class="card">
             <div class="card-title">Loading...</div>
