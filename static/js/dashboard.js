@@ -154,16 +154,30 @@ function updateSyncTime() {
   document.getElementById('sync-time').textContent = `🔄 Last synced: ${now.toLocaleTimeString()}`;
 }
 
-function filterVotes() {
-  const searchTerm = document.getElementById('search-input').value.toLowerCase();
-  const filtered = allVotes.filter(vote =>
-    vote.username.toLowerCase().includes(searchTerm) ||
-    vote.question.toLowerCase().includes(searchTerm)
-  );
-  
-  currentPage = 1;
-  renderVoteTable(filtered);
-  renderPagination(filtered.length);
+// Debounce for search input (time complexity: O(n) filtering, O(1) debounce)
+let searchTimeout;
+function filterVotesOptimized() {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => {
+    const searchTerm = document.getElementById('search-input').value.toLowerCase();
+    
+    if (!searchTerm) {
+      currentPage = 1;
+      renderVoteTableOptimized(allVotes);
+      renderPagination(allVotes.length);
+      return;
+    }
+    
+    // Time complexity: O(n) single pass filter
+    const filtered = allVotes.filter(vote =>
+      vote.username.toLowerCase().includes(searchTerm) ||
+      vote.question.toLowerCase().includes(searchTerm)
+    );
+    
+    currentPage = 1;
+    renderVoteTableOptimized(filtered);
+    renderPagination(filtered.length);
+  }, 300);
 }
 
 function renderVoteLogPage(page) {
@@ -178,14 +192,22 @@ function renderVoteTable(votes) {
   const pageVotes = votes.slice(start, end);
   
   const tbody = document.querySelector('#vote-log-table tbody');
-  tbody.innerHTML = pageVotes.map((vote, index) => `
-    <tr style="animation-delay: ${index * 50}ms;">
+  const fragment = document.createDocumentFragment();
+  
+  pageVotes.forEach((vote, index) => {
+    const tr = document.createElement('tr');
+    tr.style.animationDelay = `${index * 30}ms`;
+    tr.innerHTML = `
       <td>⏰ ${new Date(vote.timestamp).toLocaleString()}</td>
       <td>👤 ${vote.username}</td>
       <td>❓ ${vote.question}</td>
       <td><strong>✓ ${vote.choice}</strong></td>
-    </tr>
-  `).join('');
+    `;
+    fragment.appendChild(tr);
+  });
+  
+  tbody.innerHTML = '';
+  tbody.appendChild(fragment);
 }
 
 function renderPagination(totalItems) {
