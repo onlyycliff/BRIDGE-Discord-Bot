@@ -21,8 +21,8 @@
         <a href="#" class="nav-link" data-section="vote-log" onclick="showSection('vote-log'); return false;">
           📋 Vote Log
         </a>
-        <a href="#" class="nav-link" data-section="schedule" onclick="showSection('schedule'); return false;">
-          📅 Schedule
+        <a href="#" class="nav-link" data-section="interactive" onclick="showSection('interactive'); return false;">
+          ⚡ Live Control
         </a>
       </nav>
       
@@ -88,20 +88,53 @@
         </div>
       </section>
       
-      <!-- Schedule Section -->
-      <section id="schedule" class="section">
-        <h1 class="section-title">📅 Workshop Schedule</h1>
-        <p style="margin-bottom: 24px; color: var(--color-text-muted);">Click on any session to view full details</p>
-        
-        <div class="calendar-grid" id="schedule-container">
-          <div style="grid-column: 1 / -1; text-align: center; padding: 24px; color: var(--color-text-muted);">
-            Loading schedule...
+      <!-- Live Control Section -->
+      <section id="interactive" class="section">
+        <h1 class="section-title">⚡ Live Control</h1>
+        <p style="margin-bottom: 12px; color: var(--color-text-muted);">Create polls and open interactive charts for real-time insights.</p>
+
+        <div class="panel-grid">
+          <div class="card">
+            <h3 class="card-title">Create a Poll</h3>
+            <form id="create-poll-form">
+              <div style="display:flex;flex-direction:column;gap:10px;">
+                <input id="poll-question" class="search-input" placeholder="Poll question" required />
+                <input id="poll-option1" class="search-input" placeholder="Option 1" required />
+                <input id="poll-option2" class="search-input" placeholder="Option 2" required />
+                <div style="display:flex;gap:12px;">
+                  <button class="btn btn-primary" type="submit">Create Poll</button>
+                  <button class="btn btn-secondary" type="button" id="refresh-polls">Refresh Polls</button>
+                </div>
+              </div>
+            </form>
+            <div id="create-response" style="margin-top:12px;color:var(--color-text-muted)"></div>
+          </div>
+
+          <div class="card">
+            <h3 class="card-title">Live Poll Preview</h3>
+            <div id="live-poll-preview" style="min-height:200px;display:flex;align-items:center;justify-content:center;color:var(--color-text-muted);">Select a poll card to view an interactive chart</div>
           </div>
         </div>
+
+        <div style="margin-top:24px;">
+          <h3 class="section-title" style="font-size:1.125rem;margin-bottom:12px;">Recent Polls</h3>
+          <div id="polls-stream" class="panel-grid" style="gap:16px;"></div>
+        </div>
+
       </section>
     </main>
   </div>
-  
+
+  <!-- Poll Modal -->
+  <div id="poll-modal" class="modal" aria-hidden="true">
+    <div class="modal-backdrop" id="modal-backdrop"></div>
+    <div class="modal-content" role="dialog" aria-modal="true">
+      <button class="modal-close" id="modal-close">✖</button>
+      <h3 class="card-title" id="modal-title">Poll</h3>
+      <canvas id="poll-chart-canvas" width="600" height="300"></canvas>
+    </div>
+  </div>
+
   <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 </body>
 </html>

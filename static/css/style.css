@@ -664,6 +664,13 @@ tbody tr:hover {
   font-weight: 700;
 }
 
+/* Modal styles */
+.modal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 2000; }
+.modal.open { display: flex; }
+.modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.45); backdrop-filter: blur(2px); }
+.modal-content { position: relative; background: var(--color-surface); border-radius: 12px; padding: 20px; width: min(900px, 95%); box-shadow: 0 20px 60px rgba(0,0,0,0.4); }
+.modal-close { position: absolute; right: 12px; top: 12px; background: none; border: none; font-size: 1rem; cursor: pointer; }
+
 /* Responsive */
 @media (max-width: 768px) {
   .sidebar {
@@ -701,7 +708,7 @@ tbody tr:hover {
   .calendar-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .section-title {
     font-size: 1.5rem;
   }

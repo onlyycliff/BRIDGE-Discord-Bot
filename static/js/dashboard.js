@@ -277,66 +277,153 @@ async function loadBotStatus() {
   }
 }
 
-// Schedule
-async function loadScheduleData() {
-  try {
-    const response = await fetch('/api/schedule');
-    const schedule = await response.json();
-    
-    const container = document.getElementById('schedule-container');
-    container.innerHTML = '';
-    
-    schedule.forEach((session, index) => {
-      setTimeout(() => {
-        const card = createSessionCard(session);
-        container.appendChild(card);
-      }, index * 100);
-    });
-  } catch (error) {
-    console.error('Error loading schedule:', error);
+// Modal handling and interactive features
+let pollChartInstance = null;
+
+function openPollModal(poll) {
+const modal = document.getElementById('poll-modal');
+const title = document.getElementById('modal-title');
+title.textContent = poll.question;
+modal.setAttribute('aria-hidden', 'false');
+modal.classList.add('open');
+
+// Render Chart.js horizontal bar chart
+const ctx = document.getElementById('poll-chart-canvas').getContext('2d');
+const labels = poll.options.map(o => o.name);
+const data = poll.options.map(o => o.votes);
+
+if (pollChartInstance) {
+  pollChartInstance.destroy();
   }
+
+pollChartInstance = new Chart(ctx, {
+  type: 'bar',
+  data: {
+    labels: labels,
+    datasets: [{
+      label: 'Votes',
+      data: data,
+      backgroundColor: labels.map(() => getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || '#FFD700'),
+      borderRadius: 8
+    }]
+  },
+  options: {
+    indexAxis: 'y',
+    responsive: true,
+    scales: {
+      x: { beginAtZero: true }
+    },
+    plugins: { legend: { display: false } }
+  }
+});
+
+// Also show a small preview in the Live Poll Preview card
+const preview = document.getElementById('live-poll-preview');
+preview.innerHTML = `<strong>${poll.question}</strong><div style="margin-top:8px;color:var(--color-text-muted)">Click the chart to open full view</div>`;
 }
 
-function createSessionCard(session) {
-  const card = document.createElement('div');
-  card.className = `session-card ${session.pillar === 'Holistic STEMinist' ? 'holistic' : 'prodev'}`;
-  
-  const emoji = session.pillar === 'Holistic STEMinist' ? '✨' : '💼';
-  
-  card.innerHTML = `
-    <div class="session-name">${emoji} ${session.name}</div>
-    <div class="session-meta">${session.pillar}</div>
-    <div class="session-time">🕐 ${session.time}</div>
-    <div class="session-detail" id="detail-${session.id}">
-      <strong>🎤 Speaker:</strong> ${session.speaker}<br>
-      <strong>📍 Location:</strong> ${session.location}<br>
-      <strong>📝 Description:</strong> ${session.description || 'No description available'}
-    </div>
-  `;
-  
-  card.addEventListener('click', function() {
-    const detail = document.getElementById(`detail-${session.id}`);
-    detail.classList.toggle('show');
-  });
-  
-  return card;
+function closePollModal() {
+const modal = document.getElementById('poll-modal');
+modal.setAttribute('aria-hidden', 'true');
+modal.classList.remove('open');
 }
+
+// Poll creation
+async function submitPollForm(e) {
+e.preventDefault();
+const q = document.getElementById('poll-question').value.trim();
+const o1 = document.getElementById('poll-option1').value.trim();
+const o2 = document.getElementById('poll-option2').value.trim();
+const resp = document.getElementById('create-response');
+
+if (!q || !o1 || !o2) {
+  resp.textContent = 'Please provide a question and two options.';
+  return;
+}
+
+try {
+  const r = await fetch('/submit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question: q, option1: o1, option2: o2 })
+  });
+
+  const json = await r.json();
+  if (r.ok) {
+    resp.textContent = 'Poll created — refreshing list...';
+    document.getElementById('create-poll-form').reset();
+    loadPollData();
+    setTimeout(() => resp.textContent = '', 3000);
+  } else {
+    resp.textContent = json.error || 'Error creating poll';
+  }
+} catch (err) {
+  console.error(err);
+  resp.textContent = 'Network error creating poll';
+}
+}
+
+// Refresh polls button
+document.addEventListener('click', function(e) {
+if (e.target && e.target.id === 'refresh-polls') {
+  loadPollData();
+}
+});
+
+// Wire modal close
+document.addEventListener('click', function(e) {
+if (e.target && (e.target.id === 'modal-backdrop' || e.target.id === 'modal-close')) {
+  closePollModal();
+}
+});
+
+// Make poll cards clickable: modify createPollCard to attach click handler (done below when creating cards)
 
 // Auto-refresh bot status every 30 seconds
 setInterval(loadBotStatus, 30000);
 
 // Update all data
 function updateAllData() {
-  if (document.getElementById('polls').classList.contains('active')) loadPollData();
-  if (document.getElementById('vote-log').classList.contains('active')) loadVoteLogData();
-  if (document.getElementById('schedule').classList.contains('active')) loadScheduleData();
-  loadBotStatus();
+if (document.getElementById('polls').classList.contains('active')) loadPollData();
+if (document.getElementById('vote-log').classList.contains('active')) loadVoteLogData();
+if (document.getElementById('interactive').classList.contains('active')) {
+  // nothing heavy here; polls are refreshed on demand
+}
+loadBotStatus();
 }
 
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
-  initTheme();
-  loadBotStatus();
-  showSection('polls');
+initTheme();
+loadBotStatus();
+showSection('polls');
+
+// Setup form listener (live control)
+const form = document.getElementById('create-poll-form');
+if (form) form.addEventListener('submit', submitPollForm);
+
+// Delegate clicks on poll cards to open modal
+const pollsStreamObserver = new MutationObserver(() => {
+  document.querySelectorAll('#polls-container .card, #polls-stream .card').forEach(card => {
+    if (!card.dataset.clickBound) {
+      card.dataset.clickBound = '1';
+      card.style.cursor = 'pointer';
+      card.addEventListener('click', () => {
+        const idx = Array.from(card.parentElement.children).indexOf(card);
+        // attempt to read poll data embedded on card
+        const q = card.querySelector('.card-title')?.textContent || 'Poll';
+        const optionEls = card.querySelectorAll('.poll-option');
+        const options = Array.from(optionEls).map(el => ({
+          name: el.querySelector('.poll-option-label span')?.textContent || 'Option',
+          votes: parseInt(el.querySelector('.vote-count')?.textContent || '0', 10)
+        }));
+        openPollModal({ question: q, options });
+      });
+    }
+  });
+});
+pollsStreamObserver.observe(document.getElementById('polls-container'), { childList: true, subtree: true });
+pollsStreamObserver.observe(document.getElementById('polls-stream'), { childList: true, subtree: true });
+
 });
 
