@@ -64,17 +64,34 @@ class ExcelDataManager:
         """Get statistics for a specific poll"""
         with self.lock:
             try:
-                df = pd.read_excel(self.file_path, sheet_name=self.main_sheet)
-                poll_data = df[df['Poll_ID'] == poll_id]
+                # Try new sheet first, then fallback
+                try:
+                    df = pd.read_excel(self.file_path, sheet_name=self.main_sheet)
+                except ValueError:
+                    # Read all sheets and combine
+                    all_sheets = pd.read_excel(self.file_path, sheet_name=None)
+                    df_list = []
+                    for sheet, sheet_df in all_sheets.items():
+                        if not sheet_df.empty and 'Timestamp' in sheet_df.columns:
+                            df_list.append(sheet_df)
+                    
+                    if not df_list:
+                        return None
+                    df = pd.concat(df_list, ignore_index=True)
                 
-                if poll_data.empty:
+                # Try matching by poll_id, or by sheet name if no poll_id column
+                poll_data = None
+                if 'Poll_ID' in df.columns:
+                    poll_data = df[df['Poll_ID'] == poll_id]
+                
+                if poll_data is None or poll_data.empty:
                     return None
                 
                 stats = {
                     "total_votes": len(poll_data),
-                    "question": poll_data.iloc[0]['Question'],
-                    "choices": poll_data['Choice'].value_counts().to_dict(),
-                    "voters": poll_data['Username'].unique().tolist()
+                    "question": poll_data.iloc[0]['Question'] if 'Question' in poll_data.columns else "Unknown",
+                    "choices": poll_data['Choice'].value_counts().to_dict() if 'Choice' in poll_data.columns else {},
+                    "voters": poll_data['Username'].unique().tolist() if 'Username' in poll_data.columns else []
                 }
                 return stats
             except Exception as e:
@@ -82,14 +99,55 @@ class ExcelDataManager:
                 return None
     
     def get_all_votes(self):
-        """Get all votes from Excel"""
+        """Get all votes from Excel - handles both new and legacy formats"""
         with self.lock:
             try:
-                df = pd.read_excel(self.file_path, sheet_name=self.main_sheet)
-                return df.to_dict('records')
+                # Try new sheet name first, then fallback to existing sheets
+                sheet_name = self.main_sheet
+                df_list = []
+                
+                try:
+                    df = pd.read_excel(self.file_path, sheet_name=sheet_name)
+                    return df.to_dict('records')
+                except ValueError:
+                    # Sheet doesn't exist, try reading all sheets and combine
+                    all_sheets = pd.read_excel(self.file_path, sheet_name=None)
+                    for sheet, df in all_sheets.items():
+                        if df.empty:
+                            continue
+                        
+                        # Standardize legacy column names
+                        df = self._standardize_columns(df)
+                        if 'Timestamp' in df.columns and 'Question' in df.columns:
+                            df_list.append(df)
+                    
+                    if df_list:
+                        combined = pd.concat(df_list, ignore_index=True)
+                        return combined.to_dict('records')
+                    return []
             except Exception as e:
                 logger.error(f"Error reading votes: {e}")
                 return []
+    
+    def _standardize_columns(self, df):
+        """Standardize column names for legacy Excel formats"""
+        rename_map = {
+            'User': 'Username',
+            'Time': 'Timestamp',
+            'Poll ID': 'Poll_ID',
+            'user': 'Username',
+            'time': 'Timestamp',
+            'poll id': 'Poll_ID'
+        }
+        
+        # Rename columns that exist
+        df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
+        
+        # Filter out completely empty rows and columns with all NaN
+        df = df.dropna(how='all')
+        df = df.dropna(axis=1, how='all')
+        
+        return df
     
     def export_to_csv(self, output_path="poll_feedback.csv"):
         """Export all data to CSV for analysis"""
@@ -107,11 +165,35 @@ class ExcelDataManager:
         """Get summary statistics grouped by question"""
         with self.lock:
             try:
-                df = pd.read_excel(self.file_path, sheet_name=self.main_sheet)
+                # Try new sheet name first, then fallback
+                try:
+                    df = pd.read_excel(self.file_path, sheet_name=self.main_sheet)
+                except ValueError:
+                    # Sheet doesn't exist, read all sheets and combine
+                    all_sheets = pd.read_excel(self.file_path, sheet_name=None)
+                    df_list = []
+                    for sheet, sheet_df in all_sheets.items():
+                        if not sheet_df.empty:
+                            sheet_df = self._standardize_columns(sheet_df)
+                            if 'Question' in sheet_df.columns and not sheet_df['Question'].isna().all():
+                                df_list.append(sheet_df)
+                    
+                    if not df_list:
+                        return {}
+                    df = pd.concat(df_list, ignore_index=True)
+                
+                if df.empty or 'Question' not in df.columns:
+                    return {}
+                
+                # Remove rows where Question is NaN
+                df = df.dropna(subset=['Question'])
+                
+                if df.empty:
+                    return {}
+                
                 summary = df.groupby('Question').agg({
-                    'Vote_Count': 'sum',
-                    'Username': 'count',
-                    'Choice': lambda x: x.value_counts().to_dict()
+                    'Username': 'count' if 'Username' in df.columns else lambda x: len(x),
+                    'Choice': lambda x: x.value_counts().to_dict() if 'Choice' in df.columns else {}
                 }).rename(columns={'Username': 'Total_Votes'})
                 
                 return summary.to_dict('index')
