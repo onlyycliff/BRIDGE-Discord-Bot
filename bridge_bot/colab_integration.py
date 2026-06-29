@@ -5,7 +5,7 @@ import json
 import logging
 from pathlib import Path
 from datetime import datetime
-from excel_manager import excel_manager
+from .excel_manager import excel_manager
 
 try:
     import requests
