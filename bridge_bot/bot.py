@@ -45,7 +45,7 @@ class PollView(View):
         user_votes.setdefault(self.poll_id, set())
         
         if user_id in user_votes[self.poll_id]:
-            await interaction.response.send_message("You have already voted in this poll.", ephemeral=True)
+            await interaction.response.send_message("✋ You've already voted in this poll.", ephemeral=True)
             return
 
         user_votes[self.poll_id].add(user_id)
@@ -53,22 +53,31 @@ class PollView(View):
         self.votes[choice] += 1
         
         embed = interaction.message.embeds[0]
+        total = sum(self.votes.values())
+        
+        # Calculate percentages
+        pct1 = (self.votes[self.option1] / total * 100) if total > 0 else 0
+        pct2 = (self.votes[self.option2] / total * 100) if total > 0 else 0
+        
+        # Build progress bars
+        def make_bar(pct):
+            filled = int(pct / 5)
+            return f"`{'█' * filled}{'░' * (20 - filled)}` {pct:.1f}%"
         
         embed.set_field_at(
             index=0,
-            name=f"🔹 {self.option1}",
-            value=f"{self.votes[self.option1]} votes",
-            inline=True
+            name="🔹 Option 1",
+            value=f"`{self.option1}`\n{make_bar(pct1)}\n**{self.votes[self.option1]} votes**",
+            inline=False
         )
         embed.set_field_at(
             index=1,
-            name=f"🔸 {self.option2}",
-            value=f"{self.votes[self.option2]} votes",
-            inline=True
+            name="🔸 Option 2",
+            value=f"`{self.option2}`\n{make_bar(pct2)}\n**{self.votes[self.option2]} votes**",
+            inline=False
         )
         
-        await interaction.response.send_message(f"You voted for **{choice}**", ephemeral=True)
-        
+        await interaction.response.send_message(f"✓ You voted for **{choice}**", ephemeral=True)
         await interaction.message.edit(embed=embed, view=self)
         
         data = {
@@ -89,10 +98,7 @@ class PollView(View):
             pass
         
         file_path = "responses.xlsx"
-        
-        #Limit sheet name to 31 chars (Excel rule)
         sheet_name = f"{self.question[:31]}-{self.poll_id}"
-        
         
         try:
             with pd.ExcelWriter(file_path, mode='a', engine='openpyxl', if_sheet_exists='overlay') as writer:
@@ -121,21 +127,26 @@ async def send_poll(question, option1, option2):
         
         embed = discord.Embed(
             title=f"📊 {question}",
-            description=f"Vote by clicking a button below.",
-            color = 0xFFD700
+            description="**Cast your vote below** — every voice matters",
+            color=0xFFD700
         )
         
-        embed.add_field(name=f"🔹 {option1}", value="0 votes", inline=True)
-        embed.add_field(name=f"🔸 {option2}", value="0 votes", inline=True)
+        embed.add_field(
+            name="🔹 Option 1",
+            value=f"`{option1}` — 0 votes",
+            inline=False
+        )
+        embed.add_field(
+            name="🔸 Option 2",
+            value=f"`{option2}` — 0 votes",
+            inline=False
+        )
         
-
-        
-        embed.set_footer(text="BRIDGE 2026 Feedback System")
+        embed.set_footer(text="Bridge 2026 • Community Feedback")
         embed.timestamp = datetime.now()
         
         await channel.send(embed=embed, view=view)
 
-        
 
 RULES_CHANNEL_NAME = "📜｜rules"  # Change this if your channel is named differently
 GOLD = 0xFFD700
