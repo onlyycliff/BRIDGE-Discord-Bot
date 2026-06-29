@@ -6,8 +6,14 @@ from discord.ext import commands
 from discord.ui import Button, View
 from dotenv import load_dotenv
 import os
+import logging
+from excel_manager import excel_manager
 
 load_dotenv()
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Initialize the bot with the required intents
 intents = discord.Intents.default()
@@ -45,6 +51,7 @@ class PollView(View):
     
     async def handle_vote(self, interaction, choice):
         user_id = interaction.user.id
+        username = interaction.user.name
         
         # Time complexity: O(1) set lookup and insertion
         user_votes.setdefault(self.poll_id, set())
@@ -55,6 +62,18 @@ class PollView(View):
 
         user_votes[self.poll_id].add(user_id)
         self.votes[choice] += 1
+        
+        # Log vote to Excel with error handling
+        success = excel_manager.add_vote(
+            username=username,
+            user_id=user_id,
+            question=self.question,
+            choice=choice,
+            poll_id=self.poll_id
+        )
+        
+        if not success:
+            logger.warning(f"Failed to log vote to Excel for user {username}")
         
         embed = interaction.message.embeds[0]
         total = sum(self.votes.values())

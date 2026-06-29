@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, jsonify
 from bridge_bot.bot import send_poll, start_bot, bot
+from bridge_bot.excel_manager import excel_manager
 import threading
 import asyncio
 import os
@@ -215,6 +216,89 @@ def get_schedule():
         return jsonify(schedule)
     except Exception as e:
         print(f"Error getting schedule: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# New Excel Manager Endpoints
+
+@dashboard.route('/api/excel/stats', methods=['GET'])
+def get_excel_stats():
+    """Get statistics from Excel data"""
+    try:
+        all_votes = excel_manager.get_all_votes()
+        
+        if not all_votes:
+            return jsonify({
+                'total_votes': 0,
+                'unique_voters': 0,
+                'polls_count': 0,
+                'data_status': 'No data yet'
+            })
+        
+        unique_voters = len(set(v['User_ID'] for v in all_votes if 'User_ID' in v))
+        polls_count = len(set(v.get('Poll_ID') for v in all_votes if 'Poll_ID' in v))
+        
+        return jsonify({
+            'total_votes': len(all_votes),
+            'unique_voters': unique_voters,
+            'polls_count': polls_count,
+            'data_status': 'Synced',
+            'last_updated': datetime.now().isoformat()
+        })
+    except Exception as e:
+        print(f"Error getting Excel stats: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@dashboard.route('/api/excel/summary', methods=['GET'])
+def get_excel_summary():
+    """Get summary statistics by question"""
+    try:
+        summary = excel_manager.get_summary_by_question()
+        
+        result = []
+        for question, data in summary.items():
+            result.append({
+                'question': question,
+                'total_votes': int(data.get('Total_Votes', 0)),
+                'choices': data.get('Choice', {})
+            })
+        
+        return jsonify(result)
+    except Exception as e:
+        print(f"Error getting Excel summary: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@dashboard.route('/api/excel/export-csv', methods=['GET'])
+def export_excel_csv():
+    """Export all Excel data to CSV"""
+    try:
+        csv_path = excel_manager.export_to_csv()
+        
+        if not csv_path or not Path(csv_path).exists():
+            return jsonify({"error": "Export failed"}), 500
+        
+        with open(csv_path, 'r') as f:
+            csv_content = f.read()
+        
+        return csv_content, 200, {
+            'Content-Disposition': 'attachment; filename=bridge-2026-feedback.csv',
+            'Content-Type': 'text/csv'
+        }
+    except Exception as e:
+        print(f"Error exporting CSV: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@dashboard.route('/api/excel/poll/<poll_id>', methods=['GET'])
+def get_poll_details(poll_id):
+    """Get details for a specific poll"""
+    try:
+        stats = excel_manager.get_poll_stats(poll_id)
+        
+        if not stats:
+            return jsonify({"error": "Poll not found"}), 404
+        
+        return jsonify(stats)
+    except Exception as e:
+        print(f"Error getting poll details: {e}")
         return jsonify({"error": str(e)}), 500
 
 def run_bot():
