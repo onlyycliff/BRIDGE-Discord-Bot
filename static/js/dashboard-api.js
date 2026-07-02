@@ -51,6 +51,21 @@ function setupEventListeners() {
         });
     }
     
+    // Add poll option button
+    const addPollBtn = document.getElementById('add-poll-option-btn');
+    if (addPollBtn) {
+        addPollBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            addPollOption();
+        });
+    }
+    
+    // Initialize with 2 options
+    if (!document.querySelector('.poll-option-input')) {
+        addPollOption();
+        addPollOption();
+    }
+    
     // Search/filter
     const searchInput = document.getElementById('search-input');
     if (searchInput) {
@@ -224,14 +239,13 @@ function filterVotes() {
  */
 async function createPollFromForm() {
     const questionEl = document.getElementById('poll-question');
-    const option1El = document.getElementById('poll-option1');
-    const option2El = document.getElementById('poll-option2');
     const responseEl = document.getElementById('create-response');
     
-    if (!questionEl || !option1El || !option2El) return;
+    if (!questionEl) return;
     
     const question = questionEl.value.trim();
-    const options = [option1El.value.trim(), option2El.value.trim()].filter(Boolean);
+    const optionInputs = document.querySelectorAll('.poll-option-input');
+    const options = Array.from(optionInputs).map(input => input.value.trim()).filter(Boolean);
     
     if (!question) {
         showResponseMessage(responseEl, 'Please enter a question', true);
@@ -239,7 +253,7 @@ async function createPollFromForm() {
     }
     
     if (options.length < 2) {
-        showResponseMessage(responseEl, 'Please enter at least 2 options', true);
+        showResponseMessage(responseEl, 'Please provide at least 2 options', true);
         return;
     }
     
@@ -255,8 +269,9 @@ async function createPollFromForm() {
         if (response.ok) {
             showResponseMessage(responseEl, '✅ Poll created successfully!', false);
             questionEl.value = '';
-            option1El.value = '';
-            option2El.value = '';
+            document.getElementById('poll-options-list').innerHTML = '';
+            addPollOption();
+            addPollOption();
             loadDashboardData();
         } else {
             showResponseMessage(responseEl, `❌ Error: ${data.error || 'Unknown error'}`, true);
@@ -265,6 +280,58 @@ async function createPollFromForm() {
         showResponseMessage(responseEl, `❌ Network error: ${error.message}`, true);
         console.error('Error:', error);
     }
+}
+
+/**
+ * Add poll option to form
+ */
+function addPollOption(value = '') {
+    const MAX_OPTIONS = 5;
+    const container = document.getElementById('poll-options-list');
+    const index = container.children.length;
+    
+    if (index >= MAX_OPTIONS) return;
+    
+    const optionItem = document.createElement('div');
+    optionItem.style.display = 'flex';
+    optionItem.style.gap = '8px';
+    optionItem.style.alignItems = 'center';
+    optionItem.innerHTML = `
+        <input 
+            type="text" 
+            class="poll-option-input search-input" 
+            placeholder="Option ${index + 1}" 
+            value="${value}"
+            required
+            style="flex:1;"
+        />
+        <button type="button" class="btn btn-secondary" style="padding:8px 10px;font-size:0.85rem;" onclick="removePollOption(this)">
+            ✕
+        </button>
+    `;
+    
+    container.appendChild(optionItem);
+    updatePollOptionCount();
+}
+
+/**
+ * Remove poll option from form
+ */
+function removePollOption(btn) {
+    btn.parentElement.remove();
+    updatePollOptionCount();
+}
+
+/**
+ * Update poll option count display
+ */
+function updatePollOptionCount() {
+    const count = document.querySelectorAll('.poll-option-input').length;
+    const countEl = document.getElementById('poll-option-count');
+    if (countEl) countEl.textContent = count;
+    
+    const addBtn = document.getElementById('add-poll-option-btn');
+    if (addBtn) addBtn.disabled = count >= 5;
 }
 
 /**

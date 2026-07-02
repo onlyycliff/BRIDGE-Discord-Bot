@@ -117,9 +117,18 @@
             <form id="create-poll-form">
               <div style="display:flex;flex-direction:column;gap:10px;">
                 <input id="poll-question" class="search-input" placeholder="Poll question" required />
-                <input id="poll-option1" class="search-input" placeholder="Option 1" required />
-                <input id="poll-option2" class="search-input" placeholder="Option 2" required />
-                <div style="display:flex;gap:12px;">
+                
+                <div id="poll-options-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+                
+                <button type="button" class="btn btn-secondary" id="add-poll-option-btn" style="width:100%;margin-top:8px;">
+                  + Add Option
+                </button>
+                
+                <div style="font-size:0.8rem;color:var(--color-text-muted);margin-top:4px;">
+                  <span id="poll-option-count">0</span> options (max 5)
+                </div>
+                
+                <div style="display:flex;gap:12px;margin-top:12px;">
                   <button class="btn btn-primary" type="submit">Create Poll</button>
                   <button class="btn btn-secondary" type="button" id="refresh-polls">Refresh Polls</button>
                 </div>
