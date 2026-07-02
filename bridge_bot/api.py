@@ -1,6 +1,7 @@
 # Backend API for Bridge Dashboard
 import logging
 import asyncio
+from pathlib import Path
 from typing import List, Dict, Optional
 from datetime import datetime
 from flask import Blueprint, jsonify, request
@@ -112,6 +113,137 @@ def create_poll():
     except Exception as e:
         logger.error(f"Error creating poll: {e}", exc_info=True)
         return jsonify({"error": f"Server error: {str(e)}"}), 500
+
+
+
+
+@api.route('/polls', methods=['GET'])
+def list_polls():
+    """List all polls with vote counts"""
+    try:
+        polls = excel_manager.get_all_polls()
+        return jsonify(polls), 200
+    except Exception as e:
+        logger.error(f"Error listing polls: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@api.route('/polls/<int:poll_id>', methods=['GET'])
+def get_poll_detail(poll_id: int):
+    """Get detailed data for a single poll"""
+    try:
+        stats = excel_manager.get_poll_stats(poll_id)
+        if not stats:
+            return jsonify({"error": "Poll not found"}), 404
+
+        options_list = [
+            {"name": choice, "votes": count}
+            for choice, count in stats.get("choices", {}).items()
+        ]
+
+        return jsonify({
+            "poll_id": poll_id,
+            "question": stats.get("question", "Unknown"),
+            "options": options_list,
+            "total_votes": stats.get("total_votes", 0),
+            "voters_by_choice": stats.get("voters_by_choice", {})
+        }), 200
+    except Exception as e:
+        logger.error(f"Error getting poll detail: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@api.route('/votes', methods=['GET'])
+def get_votes_paginated():
+    """Get votes with pagination
+    Query params:
+        page: Page number (default: 1)
+        limit: Items per page (default: 25)
+        question: Filter by question
+        username: Filter by username
+    """
+    try:
+        votes = excel_manager.get_all_votes()
+        page = request.args.get("page", 1, type=int)
+        limit = request.args.get("limit", 25, type=int)
+        question_filter = request.args.get("question")
+        username_filter = request.args.get("username")
+
+        if question_filter:
+            votes = [v for v in votes if question_filter.lower() in str(v.get("Question", "")).lower()]
+        if username_filter:
+            votes = [v for v in votes if username_filter.lower() in str(v.get("Username", "")).lower()]
+
+        mapped = []
+        for v in votes:
+            mapped.append({
+                "timestamp": v.get("Timestamp", ""),
+                "username": v.get("Username", ""),
+                "user_id": v.get("User_ID", ""),
+                "question": v.get("Question", ""),
+                "choice": v.get("Choice", ""),
+                "poll_id": v.get("Poll_ID", "")
+            })
+
+        total = len(mapped)
+        start = (page - 1) * limit
+        end = start + limit
+        page_votes = mapped[start:end] if start < total else []
+
+        return jsonify({
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "total_pages": max(1, (total + limit - 1) // limit),
+            "votes": page_votes
+        }), 200
+    except Exception as e:
+        logger.error(f"Error getting votes: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@api.route('/bot-status', methods=['GET'])
+def get_bot_status():
+    """Get bot status information"""
+    try:
+        from .bot import bot, poll_state, start_time
+
+        online = bot is not None and bot.is_ready()
+
+        uptime_str = "N/A"
+        if online and start_time:
+            elapsed = datetime.now() - start_time
+            hours, remainder = divmod(int(elapsed.total_seconds()), 3600)
+            minutes, seconds = divmod(remainder, 60)
+            uptime_str = f"{hours}h {minutes}m {seconds}s"
+
+        all_votes = excel_manager.get_all_votes()
+        total_votes = len(all_votes)
+
+        today = datetime.now().strftime("%Y-%m-%d")
+        votes_today = sum(
+            1 for v in all_votes
+            if str(v.get("Timestamp", "")).startswith(today)
+        )
+
+        return jsonify({
+            "online": online,
+            "uptime": uptime_str,
+            "votes_total": total_votes,
+            "votes_today": votes_today,
+            "last_command": "N/A",
+            "latency_ms": round(bot.latency * 1000, 1) if online and hasattr(bot, "latency") else 0
+        }), 200
+    except Exception as e:
+        logger.error(f"Error getting bot status: {e}", exc_info=True)
+        return jsonify({
+            "online": False,
+            "uptime": "N/A",
+            "votes_total": 0,
+            "votes_today": 0,
+            "last_command": "N/A",
+            "latency_ms": 0
+        }), 200
 
 
 @api.route('/polls/stats', methods=['GET'])
@@ -230,6 +362,40 @@ def export_csv():
     except Exception as e:
         logger.error(f"Error exporting CSV: {e}")
         return jsonify({"error": f"Server error: {str(e)}"}), 500
+
+
+@api.route('/data/status', methods=['GET'])
+def get_data_status():
+    """Get storage statistics for data health indicator"""
+    try:
+        all_votes = excel_manager.get_all_votes()
+        total_records = len(all_votes)
+
+        last_timestamp = "N/A"
+        if total_records > 0:
+            timestamps = [v.get('Timestamp', '') for v in all_votes if v.get('Timestamp')]
+            if timestamps:
+                last_timestamp = max(timestamps)
+
+        file_size = "N/A"
+        try:
+            fpath = Path(excel_manager.file_path)
+            if fpath.exists():
+                size_kb = fpath.stat().st_size / 1024
+                file_size = f"{size_kb:.1f} KB"
+        except Exception:
+            pass
+
+        return jsonify({
+            "total_records": total_records,
+            "last_timestamp": last_timestamp,
+            "file_size": file_size,
+            "cache_dirty": excel_manager._dirty,
+            "status": "healthy"
+        }), 200
+    except Exception as e:
+        logger.error(f"Error getting data status: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 @api.route('/dashboard/overview', methods=['GET'])
