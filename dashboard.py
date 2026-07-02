@@ -5,6 +5,7 @@ Main entry point for the web interface and API
 
 import logging
 from flask import Flask, render_template
+import os
 import threading
 from bridge_bot.bot import start_bot, bot
 from bridge_bot.api import api
@@ -17,7 +18,20 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Initialize Flask application
-dashboard = Flask(__name__, template_folder='templates', static_folder='static')
+app = Flask(__name__, template_folder='templates', static_folder='static')
+dashboard = app
+
+# Auto-start bot thread on import (for gunicorn/Railway)
+_bot_started = False
+def _ensure_bot_started():
+    global _bot_started
+    if not _bot_started:
+        _bot_started = True
+        thread = threading.Thread(target=run_bot_thread, daemon=True)
+        thread.start()
+        logger.info("Bot thread auto-started")
+
+_ensure_bot_started()
 
 # Register API blueprint
 dashboard.register_blueprint(api)
@@ -63,14 +77,10 @@ def run_bot_thread():
 def main():
     """Main entry point"""
     try:
-        # Start bot in background daemon thread
-        bot_thread = threading.Thread(target=run_bot_thread, daemon=True)
-        bot_thread.start()
-        logger.info("Bot thread started")
-        
-        # Start Flask dashboard
-        logger.info("Starting Flask dashboard on http://localhost:5000")
-        dashboard.run(debug=False, host='localhost', port=5000)
+        _ensure_bot_started()
+        port = int(os.getenv('PORT', 5000))
+        logger.info(f"Starting Flask dashboard on http://0.0.0.0:{port}")
+        app.run(debug=False, host='0.0.0.0', port=port)
         
     except Exception as e:
         logger.error(f"Failed to start application: {e}")
