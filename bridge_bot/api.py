@@ -1,11 +1,11 @@
 # Backend API for Bridge Dashboard
 import logging
 import asyncio
-from typing import List, Dict, Tuple
+from typing import List, Dict, Optional
 from datetime import datetime
 from flask import Blueprint, jsonify, request
 from .excel_manager import excel_manager
-from .bot import poll_state, send_poll
+from .bot import send_poll
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ def health_check():
 
 
 @api.route('/polls/create', methods=['POST'])
-async def create_poll():
+def create_poll():
     """Create a new poll with multiple options
     
     Expected JSON:
@@ -61,8 +61,14 @@ async def create_poll():
         if len(options) < 2:
             return jsonify({"error": "Need at least 2 unique options"}), 400
         
-        # Send poll to Discord
-        success = await send_poll(question, options)
+        # Send poll to Discord (schedule async task)
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            success = loop.run_until_complete(send_poll(question, options))
+        except RuntimeError:
+            # If event loop already exists, use it
+            success = asyncio.run(send_poll(question, options))
         
         if not success:
             return jsonify({"error": "Failed to send poll to Discord"}), 500
