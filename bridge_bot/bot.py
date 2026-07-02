@@ -193,7 +193,9 @@ class PollView(View):
         pct = votes / max(total, 1)
         filled = int(pct * width)
         empty = width - filled
-        return f"{'\u2588' * filled}{'\u2591' * empty} {votes} vote{'s' if votes != 1 else ''} ({int(pct * 100)}%)"
+        block = '\u2588'
+        space = '\u2591'
+        return f"{block * filled}{space * empty} {votes} vote{'s' if votes != 1 else ''} ({int(pct * 100)}%)"
 
     def _update_embed_fields(self, embed: discord.Embed) -> None:
         try:
