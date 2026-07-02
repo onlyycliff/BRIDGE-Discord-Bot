@@ -1,476 +1,634 @@
-// Animate counter values
-function animateCounter(element, target) {
-  const start = 0;
-  const duration = 800;
-  const startTime = Date.now();
-  
-  function update() {
-    const elapsed = Date.now() - startTime;
-    const progress = Math.min(elapsed / duration, 1);
-    const current = Math.floor(start + (target - start) * easeOutQuad(progress));
-    element.textContent = current;
-    
-    if (progress < 1) requestAnimationFrame(update);
-  }
-  
-  function easeOutQuad(t) {
-    return t * (2 - t);
-  }
-  
-  update();
+/* Bridge 2026 Dashboard - Consolidated */
+const REFRESH_INTERVAL = 5000;
+let refreshIntervalId = null;
+
+// --- Performance Utilities ---
+const memoCache = new Map();
+function memoize(fn, key) {
+  if (memoCache.has(key)) return memoCache.get(key);
+  const result = fn();
+  memoCache.set(key, result);
+  return result;
 }
 
-// Theme toggle
+function debounce(fn, delay) {
+  let timeoutId;
+  return function (...args) {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => fn(...args), delay);
+  };
+}
+
+function throttle(fn, delay) {
+  let lastCall = 0;
+  return function (...args) {
+    const now = Date.now();
+    if (now - lastCall >= delay) { lastCall = now; fn(...args); }
+  };
+}
+
+const apiCache = new Map();
+const CACHE_DURATION = 30000;
+async function cachedFetch(url) {
+  const now = Date.now();
+  const cached = apiCache.get(url);
+  if (cached && now - cached.timestamp < CACHE_DURATION) return cached.data;
+  const resp = await fetch(url);
+  const data = await resp.json();
+  apiCache.set(url, { data, timestamp: now });
+  return data;
+}
+
+class BatchDOMUpdater {
+  constructor() { this.updates = []; this.scheduled = false; }
+  add(fn) { this.updates.push(fn); this.scheduleFlush(); }
+  scheduleFlush() { if (!this.scheduled) { this.scheduled = true; requestAnimationFrame(() => this.flush()); } }
+  flush() { this.updates.forEach(fn => fn()); this.updates = []; this.scheduled = false; }
+}
+const domUpdater = new BatchDOMUpdater();
+
+// --- Theme ---
 function initTheme() {
-  const isDark = localStorage.getItem('bridge-theme') === 'dark' ||
-    (!localStorage.getItem('bridge-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
-  
-  if (isDark) {
-    document.documentElement.classList.add('dark');
-    updateThemeIcon();
-  }
+  const isDark = localStorage.getItem("bridge-theme") === "dark" ||
+    (!localStorage.getItem("bridge-theme") && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light");
+  updateThemeIcon();
 }
 
 function toggleTheme() {
-  const isDark = document.documentElement.classList.toggle('dark');
-  localStorage.setItem('bridge-theme', isDark ? 'dark' : 'light');
+  const html = document.documentElement;
+  const isDark = html.getAttribute("data-theme") === "dark";
+  html.setAttribute("data-theme", isDark ? "light" : "dark");
+  localStorage.setItem("bridge-theme", isDark ? "light" : "dark");
   updateThemeIcon();
   updateAllData();
 }
 
 function updateThemeIcon() {
-  const icon = document.getElementById('theme-icon');
-  if (document.documentElement.classList.contains('dark')) {
-    icon.textContent = '☀️';
-  } else {
-    icon.textContent = '🌙';
+  const icon = document.getElementById("theme-icon");
+  if (!icon) return;
+  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+  icon.textContent = isDark ? "\u2600\uFE0F" : "\uD83C\uDF19";
+}
+
+// --- Hub / Section Navigation ---
+function showHub() {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  const hub = document.getElementById("hub");
+  if (hub) hub.classList.add("active");
+}
+
+function showSection(sectionId) {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  const page = document.getElementById(sectionId);
+  if (page) page.classList.add("active");
+
+  if (sectionId === "polls") loadPollData();
+  if (sectionId === "vote-log") loadVoteLogData();
+  if (sectionId === "bot-status") loadBotStatusSection();
+  loadHealthData();
+}
+
+// --- Health Data ---
+async function loadHealthData() {
+  try {
+    const data = await cachedFetch("/api/data/status");
+    const recordsEl = document.getElementById("health-records");
+    const lastEl = document.getElementById("health-last");
+    const sizeEl = document.getElementById("health-size");
+    const cacheEl = document.getElementById("health-cache");
+
+    if (recordsEl) recordsEl.textContent = data.total_records + " records";
+    if (lastEl) lastEl.textContent = data.last_timestamp !== "N/A" ? new Date(data.last_timestamp).toLocaleString() : "N/A";
+    if (sizeEl) sizeEl.textContent = data.file_size;
+    if (cacheEl) cacheEl.textContent = data.cache_dirty ? "\uD83D\uDD35 Syncing..." : "\uD83D\uDFE2 Synced";
+  } catch (e) {
+    console.error("Error loading health data:", e);
   }
 }
 
-// Section navigation
-function showSection(sectionId) {
-  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-  document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
-  
-  const section = document.getElementById(sectionId);
-  const link = document.querySelector(`[data-section="${sectionId}"]`);
-  
-  if (section) section.classList.add('active');
-  if (link) link.classList.add('active');
-  
-  // Load data when section becomes active
-  if (sectionId === 'polls') loadPollData();
-  if (sectionId === 'vote-log') loadVoteLogData();
-  if (sectionId === 'schedule') loadScheduleData();
+// --- Animated Counter ---
+function animateCounter(element, target, duration) {
+  if (!element) return;
+  if (duration === undefined) duration = 800;
+  const start = 0;
+  const startTime = performance.now();
+
+  function easeOutQuad(t) { return t * (2 - t); }
+
+  function update(currentTime) {
+    const elapsed = currentTime - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const current = Math.floor(start + (target - start) * easeOutQuad(progress));
+    element.textContent = current;
+    if (progress < 1) requestAnimationFrame(update);
+  }
+  requestAnimationFrame(update);
 }
 
-// Poll Results
+// --- Poll Data ---
 let pollChart = null;
 
 async function loadPollData() {
   try {
-    const response = await fetch('/api/polls');
+    const response = await fetch("/api/polls");
     const polls = await response.json();
-    
-    const container = document.getElementById('polls-container');
+    if (!Array.isArray(polls)) return;
+
+    const container = document.getElementById("polls-container");
     if (!container) return;
-    
-    container.innerHTML = '';
-    
-    // Calculate stats (time complexity: O(n))
+
     let totalVotes = 0;
     polls.forEach(poll => {
-      poll.options.forEach(option => {
-        totalVotes += option.votes;
-      });
+      (poll.options || []).forEach(opt => { totalVotes += opt.votes || 0; });
     });
-    
-    // Update stat cards
-    const activePollsEl = document.getElementById('active-polls-count');
-    const totalVotesEl = document.getElementById('total-votes-count');
-    const engagementEl = document.getElementById('engagement-rate');
-    
+
+    const activePollsEl = document.getElementById("active-polls-count");
+    const totalVotesEl = document.getElementById("total-votes-count");
+    const engagementEl = document.getElementById("engagement-rate");
+
     if (activePollsEl) animateCounter(activePollsEl, polls.length);
     if (totalVotesEl) animateCounter(totalVotesEl, totalVotes);
     if (engagementEl) {
-      const engagement = polls.length > 0 ? Math.round((totalVotes / (polls.length * 100)) * 100) : 0;
-      engagementEl.textContent = Math.min(engagement, 100) + '%';
+      const rate = polls.length > 0 ? Math.min(Math.round((totalVotes / (polls.length * 100)) * 100), 100) : 0;
+      engagementEl.textContent = rate + "%";
     }
-    
-    // Render poll cards
+
     const fragment = document.createDocumentFragment();
     polls.forEach((poll, index) => {
       const card = createPollCard(poll);
       card.style.animationDelay = `${index * 50}ms`;
       fragment.appendChild(card);
     });
-    
+
+    container.innerHTML = "";
     container.appendChild(fragment);
+
+    const stream = document.getElementById("polls-stream");
+    if (stream) {
+      stream.innerHTML = "";
+      const streamFragment = document.createDocumentFragment();
+      polls.slice(0, 4).forEach((poll, index) => {
+        const mini = createPollCard(poll);
+        mini.style.animationDelay = `${index * 50}ms`;
+        streamFragment.appendChild(mini);
+      });
+      stream.appendChild(streamFragment);
+    }
   } catch (error) {
-    console.error('Error loading polls:', error);
+    console.error("Error loading polls:", error);
   }
 }
 
 function createPollCard(poll) {
-  const card = document.createElement('div');
-  card.className = 'card';
-  
+  const card = document.createElement("div");
+  card.className = "card";
+  card.setAttribute("data-poll-id", poll.poll_id || "");
+
   const options = poll.options || [];
-  const maxVotes = Math.max(...options.map(o => o.votes), 1);
-  const totalVotes = options.reduce((sum, o) => sum + o.votes, 0);
-  const leadingOption = options.reduce((max, o) => o.votes > max.votes ? o : max, options[0]);
-  
-  const optionsHTML = options.map(option => `
-    <div class="poll-option">
-      <div class="poll-option-label">
-        <span>${option.name}</span>
-        <span><span class="vote-percentage">${((option.votes / totalVotes) * 100).toFixed(1)}</span>%</span>
-      </div>
-      <div class="poll-bar">
-        <div class="poll-bar-fill" style="width: 0%;" data-width="${(option.votes / maxVotes) * 100}">
-          <span class="vote-count">${option.votes}</span>
-        </div>
-      </div>
-    </div>
-  `).join('');
-  
-  card.innerHTML = `
-    <h3 class="card-title">${poll.question}</h3>
-    ${optionsHTML}
-    <div class="poll-stats">
-      <span><strong><span class="total-votes">0</span></strong> total votes</span>
-      <span>Leading: <strong>${leadingOption.name}</strong></span>
-    </div>
-    <div class="card-meta">📅 Last updated: ${new Date(poll.timestamp).toLocaleString()}</div>
-  `;
-  
-  // Animate bars and counters
-  setTimeout(() => {
-    card.querySelectorAll('.poll-bar-fill').forEach(bar => {
-      const width = bar.getAttribute('data-width');
-      bar.style.width = width + '%';
+  const totalVotes = options.reduce((sum, o) => sum + (o.votes || 0), 0);
+  const maxVotes = Math.max(...options.map(o => o.votes || 0), 1);
+  const leadingOption = options.reduce((max, o) => (o.votes || 0) > (max.votes || 0) ? o : max, options[0] || {});
+
+  const optionsHTML = options.map(option => {
+    const pct = totalVotes > 0 ? ((option.votes / totalVotes) * 100).toFixed(1) : 0;
+    const barWidth = maxVotes > 0 ? (option.votes / maxVotes) * 100 : 0;
+    return [
+      '<div class="poll-option">',
+      '<div class="poll-option-label">',
+      '<span>' + escapeHtml(option.name || "") + '</span>',
+      '<span><span class="vote-percentage">' + pct + '</span>%</span>',
+      '</div>',
+      '<div class="poll-bar">',
+      '<div class="poll-bar-fill" style="width: 0%;" data-width="' + barWidth + '">',
+      '<span class="vote-count">' + (option.votes || 0) + '</span>',
+      '</div></div></div>'
+    ].join("");
+  }).join("");
+
+  const ts = poll.timestamp ? new Date(poll.timestamp).toLocaleString() : "N/A";
+
+  card.innerHTML = [
+    '<h3 class="card-title">' + escapeHtml(poll.question) + '</h3>',
+    optionsHTML,
+    '<div class="poll-stats">',
+    '<span><strong class="total-votes">0</strong> total votes</span>',
+    '<span>Leading: <strong>' + escapeHtml(leadingOption.name || "") + '</strong></span>',
+    '</div>',
+    '<div class="card-meta">\uD83D\uDCC5 Last updated: ' + ts + '</div>'
+  ].join("");
+
+  card.style.cursor = "pointer";
+  card.addEventListener("click", () => openPollModal(poll.poll_id));
+
+  requestAnimationFrame(() => {
+    card.querySelectorAll(".poll-bar-fill").forEach(bar => {
+      bar.style.width = bar.getAttribute("data-width") + "%";
     });
-    
-    const totalVotesSpan = card.querySelector('.total-votes');
-    animateCounter(totalVotesSpan, totalVotes);
-  }, 10);
-  
+    const totalSpan = card.querySelector(".total-votes");
+    animateCounter(totalSpan, totalVotes);
+  });
+
   return card;
 }
 
-// Vote Log
+// --- Vote Log ---
 let currentPage = 1;
 const ITEMS_PER_PAGE = 25;
 let allVotes = [];
 
 async function loadVoteLogData() {
   try {
-    const response = await fetch('/api/votes');
-    allVotes = await response.json();
-    renderVoteLogPage(1);
+    const response = await fetch("/api/votes?page=" + currentPage + "&limit=" + ITEMS_PER_PAGE);
+    const data = await response.json();
+    if (!data || !data.votes) return;
+    allVotes = data.votes || [];
+    renderVoteTable(allVotes);
+    renderPagination(data.total || 0);
     updateSyncTime();
   } catch (error) {
-    console.error('Error loading vote log:', error);
+    console.error("Error loading vote log:", error);
   }
 }
 
 function updateSyncTime() {
-  const now = new Date();
-  document.getElementById('sync-time').textContent = `🔄 Last synced: ${now.toLocaleTimeString()}`;
+  const el = document.getElementById("sync-time");
+  if (el) el.textContent = "\uD83D\uDD04 Last synced: " + new Date().toLocaleTimeString();
 }
 
-// Debounce for search input (time complexity: O(n) filtering, O(1) debounce)
 let searchTimeout;
 function filterVotesOptimized() {
   clearTimeout(searchTimeout);
   searchTimeout = setTimeout(() => {
-    const searchTerm = document.getElementById('search-input').value.toLowerCase();
-    
-    if (!searchTerm) {
-      currentPage = 1;
-      renderVoteTableOptimized(allVotes);
-      renderPagination(allVotes.length);
-      return;
-    }
-    
-    // Time complexity: O(n) single pass filter
-    const filtered = allVotes.filter(vote =>
-      vote.username.toLowerCase().includes(searchTerm) ||
-      vote.question.toLowerCase().includes(searchTerm)
+    const term = (document.getElementById("search-input")?.value || "").toLowerCase();
+    if (!term) { loadVoteLogData(); return; }
+    const filtered = allVotes.filter(v =>
+      (v.username || "").toLowerCase().includes(term) ||
+      (v.question || "").toLowerCase().includes(term)
     );
-    
-    currentPage = 1;
-    renderVoteTableOptimized(filtered);
+    renderVoteTable(filtered);
     renderPagination(filtered.length);
   }, 300);
 }
 
-function renderVoteLogPage(page) {
-  currentPage = page;
-  renderVoteTable(allVotes);
-  renderPagination(allVotes.length);
-}
-
 function renderVoteTable(votes) {
-  const start = (currentPage - 1) * ITEMS_PER_PAGE;
-  const end = start + ITEMS_PER_PAGE;
-  const pageVotes = votes.slice(start, end);
-  
-  const tbody = document.querySelector('#vote-log-table tbody');
+  const tbody = document.querySelector("#vote-log-table tbody");
+  if (!tbody) return;
+  if (!votes || votes.length === 0) {
+    tbody.innerHTML = "<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--color-text-muted)">No votes yet</td></tr>";
+    return;
+  }
   const fragment = document.createDocumentFragment();
-  
-  pageVotes.forEach((vote, index) => {
-    const tr = document.createElement('tr');
-    tr.style.animationDelay = `${index * 30}ms`;
-    tr.innerHTML = `
-      <td>⏰ ${new Date(vote.timestamp).toLocaleString()}</td>
-      <td>👤 ${vote.username}</td>
-      <td>❓ ${vote.question}</td>
-      <td><strong>✓ ${vote.choice}</strong></td>
-    `;
+  votes.forEach((vote, index) => {
+    const tr = document.createElement("tr");
+    tr.style.animationDelay = index * 30 + "ms";
+    const ts = vote.timestamp ? new Date(vote.timestamp).toLocaleString() : "-";
+    tr.innerHTML = [
+      "<td>\u23F0 " + ts + "</td>",
+      "<td>\uD83D\uDC64 " + escapeHtml(vote.username || "") + "</td>",
+      "<td>\u2753 " + escapeHtml(vote.question || "") + "</td>",
+      "<td><strong>\u2713 " + escapeHtml(vote.choice || "") + "</strong></td>"
+    ].join("");
     fragment.appendChild(tr);
   });
-  
-  tbody.innerHTML = '';
+  tbody.innerHTML = "";
   tbody.appendChild(fragment);
 }
 
-function renderPagination(totalItems) {
-  const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
-  const paginationContainer = document.getElementById('pagination');
-  
-  let html = `<button onclick="renderVoteLogPage(1)" ${currentPage === 1 ? 'disabled' : ''}>« First</button>
-             <button onclick="renderVoteLogPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>‹ Prev</button>`;
-  
+function renderPagination(total) {
+  const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
+  const container = document.getElementById("pagination");
+  if (!container) return;
+  if (totalPages <= 1) {
+    container.innerHTML = "<span id="page-info">Page 1 of 1</span>";
+    return;
+  }
+  let html = '<button onclick="goToPage(1)" ' + (currentPage === 1 ? "disabled" : "") + '>\u00AB First</button>';
+  html += '<button onclick="goToPage(' + (currentPage - 1) + ')" ' + (currentPage === 1 ? "disabled" : "") + '>\u2039 Prev</button>';
   for (let i = Math.max(1, currentPage - 2); i <= Math.min(totalPages, currentPage + 2); i++) {
-    html += `<button onclick="renderVoteLogPage(${i})" class="${i === currentPage ? 'active' : ''}">${i}</button>`;
+    html += '<button onclick="goToPage(' + i + ')" class="' + (i === currentPage ? "active" : "") + '">' + i + "</button>";
   }
-  
-  html += `<button onclick="renderVoteLogPage(${totalPages})" ${currentPage === totalPages ? 'disabled' : ''}>Next ›</button>
-          <button onclick="renderVoteLogPage(${totalPages})" ${currentPage === totalPages ? 'disabled' : ''}>Last »</button>`;
-  
-  paginationContainer.innerHTML = html;
-  document.getElementById('page-info').textContent = `Page ${currentPage} of ${totalPages}`;
+  html += '<button onclick="goToPage(' + (currentPage + 1) + ')" ' + (currentPage === totalPages ? "disabled" : "") + '>Next \u203A</button>';
+  html += '<button onclick="goToPage(' + totalPages + ')" ' + (currentPage === totalPages ? "disabled" : "") + '>Last \u00BB</button>';
+  container.innerHTML = html;
+  const pageInfo = document.getElementById("page-info");
+  if (pageInfo) pageInfo.textContent = "Page " + currentPage + " of " + totalPages;
 }
 
-async function exportCSV() {
-  try {
-    const response = await fetch('/api/votes/export');
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'vote-log.csv';
-    a.click();
-    window.URL.revokeObjectURL(url);
-  } catch (error) {
-    console.error('Error exporting CSV:', error);
-  }
+function goToPage(page) {
+  currentPage = page;
+  loadVoteLogData();
 }
 
-// Bot Status
+// --- Bot Status ---
 async function loadBotStatus() {
   try {
-    const response = await fetch('/api/bot-status');
-    const status = await response.json();
-    
-    const container = document.getElementById('bot-status-container');
-    
-    // Update sidebar indicator
-    const indicator = document.getElementById('bot-status-indicator');
+    const status = await cachedFetch("/api/bot-status");
+    const indicator = document.getElementById("bot-status-indicator");
     if (indicator) {
-      const dot = indicator.querySelector('.status-dot');
-      dot.classList.remove('online', 'offline');
-      dot.classList.add(status.online ? 'online' : 'offline');
+      const dot = indicator.querySelector(".status-dot");
+      if (dot) {
+        dot.classList.remove("online", "offline");
+        dot.classList.add(status.online ? "online" : "offline");
+      }
+      const label = indicator.querySelector(".status-text");
+      if (label) label.textContent = status.online ? "Online" : "Offline";
     }
-    
-    container.innerHTML = `
-      <div class="card">
-        <h3 class="card-title">🤖 Bot Status</h3>
-        <div class="status-indicator">
-          <div class="status-dot ${status.online ? 'online' : 'offline'}"></div>
-          <span>${status.online ? '🟢 Online' : '🔴 Offline'}</span>
-        </div>
-        <div class="status-info">
-          <div class="status-row">
-            <span class="status-label">⏱️ Uptime:</span>
-            <span class="status-value">${status.uptime}</span>
-          </div>
-          <div class="status-row">
-            <span class="status-label">💬 Last Command:</span>
-            <span class="status-value">${status.last_command || 'N/A'}</span>
-          </div>
-          <div class="status-row">
-            <span class="status-label">📊 Today's Votes:</span>
-            <span class="status-value"><span class="votes-today">0</span></span>
-          </div>
-          <div class="status-row">
-            <span class="status-label">🎯 Total Votes:</span>
-            <span class="status-value"><span class="votes-total">0</span></span>
-          </div>
-        </div>
-      </div>
-    `;
-    
-    // Animate counters
-    setTimeout(() => {
-      const todaySpan = container.querySelector('.votes-today');
-      const totalSpan = container.querySelector('.votes-total');
-      animateCounter(todaySpan, status.votes_today);
-      animateCounter(totalSpan, status.votes_total);
-    }, 100);
   } catch (error) {
-    console.error('Error loading bot status:', error);
+    console.error("Error loading bot status:", error);
   }
 }
 
-// Modal handling and interactive features
+async function loadBotStatusSection() {
+  try {
+    const status = await cachedFetch("/api/bot-status");
+    const container = document.getElementById("bot-status-container");
+    if (!container) return;
+
+    container.innerHTML = [
+      '<div class="card" style="max-width:600px;">',
+      '<h3 class="card-title">\uD83E\uDD16 Discord Bot</h3>',
+      '<div class="status-indicator">',
+      '<div class="status-dot ' + (status.online ? "online" : "offline") + '"></div>',
+      '<span style="font-weight:600;">' + (status.online ? "\uD83D\uDFE2 Online" : "\uD83D\uDD34 Offline") + "</span>",
+      "</div>",
+      '<div class="status-info">',
+      '<div class="status-row"><span class="status-label">\u23F1\uFE0F Uptime:</span><span class="status-value">' + (status.uptime || "N/A") + "</span></div>",
+      '<div class="status-row"><span class="status-label">\uD83C\uDFAF Total Votes:</span><span class="status-value"><span class="votes-total">0</span></span></div>',
+      '<div class="status-row"><span class="status-label">\uD83D\uDCCA Today\'s Votes:</span><span class="status-value"><span class="votes-today">0</span></span></div>',
+      '<div class="status-row"><span class="status-label">\uD83D\uDDA5\uFE0F Latency:</span><span class="status-value">' + (status.latency_ms || 0) + "ms</span></div>",
+      "</div></div>"
+    ].join("");
+
+    requestAnimationFrame(() => {
+      const todaySpan = container.querySelector(".votes-today");
+      const totalSpan = container.querySelector(".votes-total");
+      animateCounter(todaySpan, status.votes_today || 0);
+      animateCounter(totalSpan, status.votes_total || 0);
+    });
+  } catch (error) {
+    console.error("Error loading bot status section:", error);
+  }
+}
+
+// --- Poll Modal (Chart.js + Voter Breakdown) ---
 let pollChartInstance = null;
 
-function openPollModal(poll) {
-const modal = document.getElementById('poll-modal');
-const title = document.getElementById('modal-title');
-title.textContent = poll.question;
-modal.setAttribute('aria-hidden', 'false');
-modal.classList.add('open');
+async function openPollModal(pollId) {
+  const modal = document.getElementById("poll-modal");
+  const title = document.getElementById("modal-title");
+  if (!modal || !title) return;
 
-// Render Chart.js horizontal bar chart
-const ctx = document.getElementById('poll-chart-canvas').getContext('2d');
-const labels = poll.options.map(o => o.name);
-const data = poll.options.map(o => o.votes);
+  try {
+    const resp = await fetch("/api/polls/" + pollId);
+    const data = await resp.json();
+    if (!data || data.error) {
+      title.textContent = "Error loading poll";
+      return;
+    }
 
-if (pollChartInstance) {
-  pollChartInstance.destroy();
+    title.textContent = data.question || "Poll";
+    modal.setAttribute("aria-hidden", "false");
+    modal.classList.add("open");
+
+    const ctx = document.getElementById("poll-chart-canvas");
+    if (!ctx) return;
+    const canvas = ctx.getContext("2d");
+
+    const labels = (data.options || []).map(o => o.name || "");
+    const chartData = (data.options || []).map(o => o.votes || 0);
+    const colors = ["#6366F1", "#8B5CF6", "#EC4899", "#F59E0B", "#22C55E"];
+
+    if (pollChartInstance) pollChartInstance.destroy();
+
+    pollChartInstance = new Chart(canvas, {
+      type: "bar",
+      data: {
+        labels: labels,
+        datasets: [{
+          label: "Votes",
+          data: chartData,
+          backgroundColor: labels.map(function(_, i) { return colors[i % colors.length]; }),
+          borderRadius: 8,
+          borderSkipped: false
+        }]
+      },
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        maintainAspectRatio: true,
+        animation: { duration: 600, easing: "easeOutQuart" },
+        scales: {
+          x: { beginAtZero: true, ticks: { stepSize: 1, color: "#94A3B8" }, grid: { color: "rgba(148,163,184,0.15)" } },
+          y: { ticks: { color: "#94A3B8" }, grid: { display: false } }
+        },
+        plugins: {
+          legend: { display: false }
+        }
+      }
+    });
+
+    const preview = document.getElementById("live-poll-preview");
+    if (preview) {
+      preview.innerHTML = "<strong>" + escapeHtml(data.question) + '</strong><div style="margin-top:8px;color:var(--color-text-muted)">Click the chart to open full view</div>';
+    }
+
+    renderVoterBreakdown(data.voters_by_choice || {});
+
+    const refreshBtn = document.getElementById("refresh-poll-data");
+    if (refreshBtn) {
+      refreshBtn.onclick = function() { openPollModal(pollId); };
+    }
+
+  } catch (error) {
+    console.error("Error opening poll modal:", error);
+    title.textContent = "Error loading poll";
+  }
+}
+
+function renderVoterBreakdown(votersByChoice) {
+  const container = document.getElementById("voter-breakdown-content");
+  if (!container) return;
+
+  var entries = Object.keys(votersByChoice);
+  if (entries.length === 0) {
+    container.innerHTML = '<p style="color:var(--color-text-muted);font-size:0.875rem;">No voter data available yet.</p>';
+    return;
   }
 
-pollChartInstance = new Chart(ctx, {
-  type: 'bar',
-  data: {
-    labels: labels,
-    datasets: [{
-      label: 'Votes',
-      data: data,
-      backgroundColor: labels.map(() => getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || '#FFD700'),
-      borderRadius: 8
-    }]
-  },
-  options: {
-    indexAxis: 'y',
-    responsive: true,
-    scales: {
-      x: { beginAtZero: true }
-    },
-    plugins: { legend: { display: false } }
-  }
-});
+  container.innerHTML = "";
+  entries.forEach(function(choice, idx) {
+    var voters = votersByChoice[choice];
+    var section = document.createElement("div");
+    section.className = "voter-section";
+    section.style.animationDelay = (idx * 80) + "ms";
 
-// Also show a small preview in the Live Poll Preview card
-const preview = document.getElementById('live-poll-preview');
-preview.innerHTML = `<strong>${poll.question}</strong><div style="margin-top:8px;color:var(--color-text-muted)">Click the chart to open full view</div>`;
+    var voterList = "";
+    if (voters && voters.length > 0) {
+      voterList = voters.map(function(v) {
+        return '<span class="voter-tag">' + escapeHtml(v) + "</span>";
+      }).join("");
+    } else {
+      voterList = '<span style="color:var(--color-text-muted);font-size:0.8125rem;">No voters yet</span>';
+    }
+
+    section.innerHTML = [
+      '<div class="voter-section-header">',
+      '<span class="voter-section-name">' + escapeHtml(choice) + "</span>",
+      '<span class="voter-section-count">' + voters.length + " voter" + (voters.length !== 1 ? "s" : "") + "</span>",
+      "</div>",
+      '<div class="voter-tags">' + voterList + "</div>"
+    ].join("");
+    container.appendChild(section);
+  });
 }
 
 function closePollModal() {
-const modal = document.getElementById('poll-modal');
-modal.setAttribute('aria-hidden', 'true');
-modal.classList.remove('open');
+  const modal = document.getElementById("poll-modal");
+  if (!modal) return;
+  modal.setAttribute("aria-hidden", "true");
+  modal.classList.remove("open");
 }
 
-// Poll creation
+// --- Poll Creation ---
 async function submitPollForm(e) {
-e.preventDefault();
-const q = document.getElementById('poll-question').value.trim();
-const o1 = document.getElementById('poll-option1').value.trim();
-const o2 = document.getElementById('poll-option2').value.trim();
-const resp = document.getElementById('create-response');
+  e.preventDefault();
+  const q = document.getElementById("poll-question");
+  const resp = document.getElementById("create-response");
+  if (!q || !resp) return;
 
-if (!q || !o1 || !o2) {
-  resp.textContent = 'Please provide a question and two options.';
-  return;
-}
+  const question = q.value.trim();
+  const optionInputs = document.querySelectorAll(".poll-option-input");
+  const options = Array.from(optionInputs).map(function(i) { return i.value.trim(); }).filter(Boolean);
 
-try {
-  const r = await fetch('/submit', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question: q, option1: o1, option2: o2 })
-  });
+  if (!question) { resp.textContent = "Please enter a question."; return; }
+  if (options.length < 2) { resp.textContent = "Please provide at least 2 options."; return; }
 
-  const json = await r.json();
-  if (r.ok) {
-    resp.textContent = 'Poll created — refreshing list...';
-    document.getElementById('create-poll-form').reset();
-    loadPollData();
-    setTimeout(() => resp.textContent = '', 3000);
-  } else {
-    resp.textContent = json.error || 'Error creating poll';
-  }
-} catch (err) {
-  console.error(err);
-  resp.textContent = 'Network error creating poll';
-}
-}
-
-// Refresh polls button
-document.addEventListener('click', function(e) {
-if (e.target && e.target.id === 'refresh-polls') {
-  loadPollData();
-}
-});
-
-// Wire modal close
-document.addEventListener('click', function(e) {
-if (e.target && (e.target.id === 'modal-backdrop' || e.target.id === 'modal-close')) {
-  closePollModal();
-}
-});
-
-// Make poll cards clickable: modify createPollCard to attach click handler (done below when creating cards)
-
-// Auto-refresh bot status every 30 seconds
-setInterval(loadBotStatus, 30000);
-
-// Update all data
-function updateAllData() {
-if (document.getElementById('polls').classList.contains('active')) loadPollData();
-if (document.getElementById('vote-log').classList.contains('active')) loadVoteLogData();
-if (document.getElementById('interactive').classList.contains('active')) {
-  // nothing heavy here; polls are refreshed on demand
-}
-loadBotStatus();
-}
-
-// Initialize
-document.addEventListener('DOMContentLoaded', function() {
-initTheme();
-loadBotStatus();
-showSection('polls');
-
-// Setup form listener (live control)
-const form = document.getElementById('create-poll-form');
-if (form) form.addEventListener('submit', submitPollForm);
-
-// Delegate clicks on poll cards to open modal
-const pollsStreamObserver = new MutationObserver(() => {
-  document.querySelectorAll('#polls-container .card, #polls-stream .card').forEach(card => {
-    if (!card.dataset.clickBound) {
-      card.dataset.clickBound = '1';
-      card.style.cursor = 'pointer';
-      card.addEventListener('click', () => {
-        const idx = Array.from(card.parentElement.children).indexOf(card);
-        // attempt to read poll data embedded on card
-        const q = card.querySelector('.card-title')?.textContent || 'Poll';
-        const optionEls = card.querySelectorAll('.poll-option');
-        const options = Array.from(optionEls).map(el => ({
-          name: el.querySelector('.poll-option-label span')?.textContent || 'Option',
-          votes: parseInt(el.querySelector('.vote-count')?.textContent || '0', 10)
-        }));
-        openPollModal({ question: q, options });
-      });
+  try {
+    const r = await fetch("/api/polls/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: question, options: options })
+    });
+    const json = await r.json();
+    if (r.ok) {
+      resp.textContent = "\u2705 Poll created successfully!";
+      q.value = "";
+      document.getElementById("poll-options-list").innerHTML = "";
+      addPollOption(); addPollOption();
+      loadPollData();
+      setTimeout(function() { resp.textContent = ""; }, 3000);
+    } else {
+      resp.textContent = "\u274C Error: " + (json.error || "Unknown error");
     }
+  } catch (err) {
+    console.error(err);
+    resp.textContent = "\u274C Network error creating poll";
+  }
+}
+
+function addPollOption(value) {
+  if (value === undefined) value = "";
+  var MAX = 5;
+  var container = document.getElementById("poll-options-list");
+  if (!container) return;
+  var idx = container.children.length;
+  if (idx >= MAX) return;
+  var div = document.createElement("div");
+  div.style.cssText = "display:flex;gap:8px;align-items:center;";
+  div.innerHTML = [
+    '<input type="text" class="poll-option-input search-input" placeholder="Option ' + (idx + 1) + '" value="' + value + '" required style="flex:1;">',
+    '<button type="button" class="btn btn-secondary" style="padding:8px 10px;font-size:0.85rem;" onclick="this.parentElement.remove();updatePollOptionCount()">\u2715</button>'
+  ].join("");
+  container.appendChild(div);
+  updatePollOptionCount();
+}
+
+function updatePollOptionCount() {
+  var count = document.querySelectorAll(".poll-option-input").length;
+  var el = document.getElementById("poll-option-count");
+  if (el) el.textContent = count;
+  var btn = document.getElementById("add-poll-option-btn");
+  if (btn) btn.disabled = count >= 5;
+}
+
+// --- CSV Export ---
+async function exportCSV() {
+  try {
+    const resp = await fetch("/api/export/csv");
+    const data = await resp.json();
+    if (resp.ok) {
+      alert("\u2705 Data exported to: " + data.file);
+    } else {
+      alert("\u274C Export failed: " + data.error);
+    }
+  } catch (err) {
+    console.error(err);
+    alert("\u274C Error exporting CSV");
+  }
+}
+
+// --- Auto Refresh ---
+function startAutoRefresh() {
+  if (refreshIntervalId) clearInterval(refreshIntervalId);
+  refreshIntervalId = setInterval(function() {
+    var active = document.querySelector(".page.active");
+    if (!active) return;
+    var id = active.id;
+    if (id === "polls") loadPollData();
+    if (id === "vote-log") loadVoteLogData();
+    if (id === "bot-status") loadBotStatusSection();
+    loadHealthData();
+    loadBotStatus();
+  }, REFRESH_INTERVAL);
+}
+
+function stopAutoRefresh() {
+  if (refreshIntervalId) { clearInterval(refreshIntervalId); refreshIntervalId = null; }
+}
+
+function updateAllData() {
+  loadBotStatus();
+  loadHealthData();
+  var active = document.querySelector(".page.active");
+  if (!active) return;
+  if (active.id === "polls") loadPollData();
+  if (active.id === "vote-log") loadVoteLogData();
+  if (active.id === "bot-status") loadBotStatusSection();
+}
+
+// --- Utility ---
+function escapeHtml(text) {
+  if (!text) return "";
+  var d = document.createElement("div");
+  d.textContent = text;
+  return d.innerHTML;
+}
+
+// --- Initialization ---
+document.addEventListener("DOMContentLoaded", function () {
+  initTheme();
+  loadBotStatus();
+  loadHealthData();
+  showSection("polls");
+
+  const form = document.getElementById("create-poll-form");
+  if (form) form.addEventListener("submit", submitPollForm);
+
+  const addBtn = document.getElementById("add-poll-option-btn");
+  if (addBtn) addBtn.addEventListener("click", function (e) { e.preventDefault(); addPollOption(); });
+
+  if (!document.querySelector(".poll-option-input")) {
+    addPollOption(""); addPollOption("");
+  }
+
+  document.addEventListener("click", function (e) {
+    if (e.target && (e.target.id === "modal-backdrop" || e.target.id === "modal-close")) closePollModal();
   });
-});
-pollsStreamObserver.observe(document.getElementById('polls-container'), { childList: true, subtree: true });
-pollsStreamObserver.observe(document.getElementById('polls-stream'), { childList: true, subtree: true });
 
-});
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) stopAutoRefresh(); else { updateAllData(); startAutoRefresh(); }
+  });
 
+  startAutoRefresh();
+});

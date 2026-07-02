@@ -10,158 +10,179 @@
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body>
-  <div class="container">
-    <!-- Sidebar -->
-    <aside class="sidebar">
-      <div class="logo">🌉 Bridge 2026</div>
-      
-      <nav class="nav-links">
-        <a href="#" class="nav-link active" data-section="polls" onclick="showSection('polls'); return false;">
-          📊 Poll Results
-        </a>
-        <a href="#" class="nav-link" data-section="vote-log" onclick="showSection('vote-log'); return false;">
-          📋 Vote Log
-        </a>
-        <a href="#" class="nav-link" data-section="interactive" onclick="showSection('interactive'); return false;">
-          ⚡ Live Control
-        </a>
-      </nav>
-      
-      <div class="sidebar-bottom">
-        <div id="bot-status-indicator" style="display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 6px; background-color: var(--color-surface-2);">
-          <div class="status-dot online"></div>
-          <span style="font-size: 0.8125rem;">Bot Online</span>
+  <div class="app">
+    <!-- HUB PAGE -->
+    <div id="hub" class="page active">
+      <div class="hub-center">
+        <div style="position:absolute;top:20px;right:24px;display:flex;gap:12px;align-items:center;z-index:10;">
+  <div id="bot-status-indicator" style="display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:6px;background:var(--color-surface);border:1px solid var(--color-border);font-size:0.75rem;">
+    <div class="status-dot online" style="width:8px;height:8px;"></div>
+    <span class="status-text">Online</span>
+  </div>
+  <button class="theme-toggle" onclick="toggleTheme()" style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:8px;padding:6px 10px;cursor:pointer;color:var(--color-text);font-family:inherit;font-size:0.8125rem;display:flex;align-items:center;gap:6px;">
+    <span id="theme-icon">\u2600\uFE0F</span>
+    <span>Theme</span>
+  </button>
+</div>
+<div class="hub-brand">
+          <span class="hub-brand-icon">🌉</span>
+          <span>Bridge 2026</span>
         </div>
-        <button class="theme-toggle" onclick="toggleTheme()">
-          <span id="theme-icon">🌙</span>
-          <span style="font-size: 0.8125rem;">Theme</span>
-        </button>
+        <p class="hub-tagline">Dashboard &amp; Feedback Center</p>
+        <div class="hub-grid">
+          <div class="hub-card" onclick="showSection('polls')">
+            <div class="hub-card-icon">📊</div>
+            <div class="hub-card-title">Poll Results</div>
+            <div class="hub-card-desc">View vote breakdowns, voter lists, and real-time chart data for every poll</div>
+          </div>
+          <div class="hub-card" onclick="showSection('vote-log')">
+            <div class="hub-card-icon">📋</div>
+            <div class="hub-card-title">Vote Log</div>
+            <div class="hub-card-desc">Browse every vote with search, pagination, and CSV export</div>
+          </div>
+          <div class="hub-card" onclick="showSection('interactive')">
+            <div class="hub-card-icon">⚡</div>
+            <div class="hub-card-title">Live Control</div>
+            <div class="hub-card-desc">Create polls on the fly and preview live poll data</div>
+          </div>
+          <div class="hub-card" onclick="showSection('bot-status')">
+            <div class="hub-card-icon">🤖</div>
+            <div class="hub-card-title">Bot Status</div>
+            <div class="hub-card-desc">Discord bot health, uptime, latency, and today's activity</div>
+          </div>
+        </div>
+        <div class="hub-health" id="hub-health">
+          <div class="health-row"><span>Data Storage</span><span id="health-records">—</span></div>
+          <div class="health-row"><span>Last Activity</span><span id="health-last">—</span></div>
+          <div class="health-row"><span>File Size</span><span id="health-size">—</span></div>
+          <div class="health-row"><span>Cache Status</span><span id="health-cache">—</span></div>
+        </div>
       </div>
-    </aside>
-    
-    <!-- Main Content -->
-    <main class="main-content">
-      <!-- Poll Results Section -->
-      <section id="polls" class="section active">
-        <h1 class="section-title">📊 Poll Results</h1>
-        
-        <!-- Live Stats Bar -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
-          <div class="stat-card">
-            <div class="stat-label">Active Polls</div>
-            <div class="stat-value" id="active-polls-count">0</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Total Votes</div>
-            <div class="stat-value" id="total-votes-count">0</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Engagement Rate</div>
-            <div class="stat-value" id="engagement-rate">0%</div>
-          </div>
+    </div>
+
+    <!-- POLL RESULTS SECTION -->
+    <div id="polls" class="page">
+      <button class="back-btn" onclick="showHub()">← Back</button>
+      <h1 class="section-title">📊 Poll Results</h1>
+
+      <div class="stat-bar">
+        <div class="stat-card">
+          <div class="stat-label">Active Polls</div>
+          <div class="stat-value" id="active-polls-count">0</div>
         </div>
-        
-        <div class="panel-grid" id="polls-container">
-          <div class="card">
-            <div class="card-title">Loading...</div>
-          </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Votes</div>
+          <div class="stat-value" id="total-votes-count">0</div>
         </div>
-      </section>
-      
-      <!-- Vote Log Section -->
-      <section id="vote-log" class="section">
-        <h1 class="section-title">📋 Vote Log</h1>
-        
+        <div class="stat-card">
+          <div class="stat-label">Engagement Rate</div>
+          <div class="stat-value" id="engagement-rate">0%</div>
+        </div>
+      </div>
+
+      <div class="panel-grid" id="polls-container">
+        <div class="card"><div class="card-title">Loading...</div></div>
+      </div>
+    </div>
+
+    <!-- VOTE LOG SECTION -->
+    <div id="vote-log" class="page">
+      <button class="back-btn" onclick="showHub()">← Back</button>
+      <h1 class="section-title">📋 Vote Log</h1>
+
+      <div class="card">
+        <div class="search-bar">
+          <input type="text" id="search-input" class="search-input" placeholder="Search by username or poll question..." oninput="filterVotesOptimized()">
+          <button class="btn btn-primary" onclick="exportCSV()">📥 Export CSV</button>
+        </div>
+
+        <div class="table-wrapper">
+          <table id="vote-log-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Username</th>
+                <th>Poll Question</th>
+                <th>Vote Choice</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td colspan="4" style="text-align:center;padding:24px;">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div style="margin-top:16px;font-size:0.8125rem;color:var(--color-text-muted)" id="sync-time">
+          Last synced: just now
+        </div>
+      </div>
+
+      <div class="pagination" id="pagination" style="margin-top:24px;">
+        <span id="page-info">Page 1 of 1</span>
+      </div>
+    </div>
+
+    <!-- LIVE CONTROL SECTION -->
+    <div id="interactive" class="page">
+      <button class="back-btn" onclick="showHub()">← Back</button>
+      <h1 class="section-title">⚡ Live Control</h1>
+      <p style="margin-bottom:12px;color:var(--color-text-muted);">Create polls and open interactive charts for real-time insights.</p>
+
+      <div class="panel-grid">
         <div class="card">
-          <div class="search-bar">
-            <input type="text" id="search-input" class="search-input" placeholder="Search by username or poll question..." oninput="filterVotesOptimized()">
-            <button class="btn btn-primary" onclick="exportCSV()">📥 Export CSV</button>
-          </div>
-          
-          <div class="table-wrapper">
-            <table id="vote-log-table">
-              <thead>
-                <tr>
-                  <th>Timestamp</th>
-                  <th>Username</th>
-                  <th>Poll Question</th>
-                  <th>Vote Choice</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td colspan="4" style="text-align: center; padding: 24px;">Loading...</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          
-          <div style="margin-top: 16px; font-size: 0.8125rem; color: var(--color-text-muted);" id="sync-time">
-            Last synced: just now
-          </div>
-        </div>
-        
-        <div class="pagination" id="pagination" style="margin-top: 24px;">
-          <span id="page-info">Page 1 of 1</span>
-        </div>
-      </section>
-      
-      <!-- Live Control Section -->
-      <section id="interactive" class="section">
-        <h1 class="section-title">⚡ Live Control</h1>
-        <p style="margin-bottom: 12px; color: var(--color-text-muted);">Create polls and open interactive charts for real-time insights.</p>
-
-        <div class="panel-grid">
-          <div class="card">
-            <h3 class="card-title">Create a Poll</h3>
-            <form id="create-poll-form">
-              <div style="display:flex;flex-direction:column;gap:10px;">
-                <input id="poll-question" class="search-input" placeholder="Poll question" required />
-                
-                <div id="poll-options-list" style="display:flex;flex-direction:column;gap:8px;"></div>
-                
-                <button type="button" class="btn btn-secondary" id="add-poll-option-btn" style="width:100%;margin-top:8px;">
-                  + Add Option
-                </button>
-                
-                <div style="font-size:0.8rem;color:var(--color-text-muted);margin-top:4px;">
-                  <span id="poll-option-count">0</span> options (max 5)
-                </div>
-                
-                <div style="display:flex;gap:12px;margin-top:12px;">
-                  <button class="btn btn-primary" type="submit">Create Poll</button>
-                  <button class="btn btn-secondary" type="button" id="refresh-polls">Refresh Polls</button>
-                </div>
+          <h3 class="card-title">Create a Poll</h3>
+          <form id="create-poll-form">
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <input id="poll-question" class="search-input" placeholder="Poll question" required />
+              <div id="poll-options-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+              <button type="button" class="btn btn-secondary" id="add-poll-option-btn" style="width:100%;margin-top:8px;">+ Add Option</button>
+              <div style="font-size:0.8rem;color:var(--color-text-muted);margin-top:4px;">
+                <span id="poll-option-count">0</span> options (max 5)
               </div>
-            </form>
-            <div id="create-response" style="margin-top:12px;color:var(--color-text-muted)"></div>
-          </div>
-
-          <div class="card">
-            <h3 class="card-title">Live Poll Preview</h3>
-            <div id="live-poll-preview" style="min-height:200px;display:flex;align-items:center;justify-content:center;color:var(--color-text-muted);">Select a poll card to view an interactive chart</div>
-          </div>
+              <div style="display:flex;gap:12px;margin-top:12px;">
+                <button class="btn btn-primary" type="submit">Create Poll</button>
+                <button class="btn btn-secondary" type="button" id="refresh-polls">Refresh Polls</button>
+              </div>
+            </div>
+          </form>
+          <div id="create-response" style="margin-top:12px;color:var(--color-text-muted)"></div>
         </div>
 
-        <div style="margin-top:24px;">
-          <h3 class="section-title" style="font-size:1.125rem;margin-bottom:12px;">Recent Polls</h3>
-          <div id="polls-stream" class="panel-grid" style="gap:16px;"></div>
+        <div class="card">
+          <h3 class="card-title">Live Poll Preview</h3>
+          <div id="live-poll-preview" style="min-height:200px;display:flex;align-items:center;justify-content:center;color:var(--color-text-muted);">Select a poll card to view an interactive chart</div>
         </div>
+      </div>
 
-      </section>
-    </main>
+      <div style="margin-top:24px;">
+        <h3 style="font-size:1.125rem;margin-bottom:12px;font-weight:700;">Recent Polls</h3>
+        <div id="polls-stream" class="panel-grid" style="gap:16px;"></div>
+      </div>
+    </div>
+
+    <!-- BOT STATUS SECTION -->
+    <div id="bot-status" class="page">
+      <button class="back-btn" onclick="showHub()">← Back</button>
+      <h1 class="section-title">🤖 Bot Status</h1>
+      <div id="bot-status-container"></div>
+    </div>
   </div>
 
-  <!-- Poll Modal -->
+  <!-- POLL MODAL -->
   <div id="poll-modal" class="modal" aria-hidden="true">
     <div class="modal-backdrop" id="modal-backdrop"></div>
     <div class="modal-content" role="dialog" aria-modal="true">
       <button class="modal-close" id="modal-close">✖</button>
       <h3 class="card-title" id="modal-title">Poll</h3>
       <canvas id="poll-chart-canvas" width="600" height="300"></canvas>
+      <div id="voter-breakdown" class="voter-breakdown">
+        <h4 class="voter-breakdown-title">👥 Voter Breakdown</h4>
+        <div id="voter-breakdown-content"></div>
+      </div>
+      <button class="btn btn-secondary" id="refresh-poll-data" style="margin-top:16px;width:100%;">🔄 Refresh Poll Data</button>
     </div>
   </div>
 
-  <script src="{{ url_for('static', filename='js/dashboard-api.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 </body>
 </html>

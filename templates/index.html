@@ -4,323 +4,135 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bridge 2026 - Create Poll</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-        
-        .container {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            max-width: 600px;
-            width: 100%;
-            padding: 40px;
-        }
-        
-        h1 {
-            color: #333;
-            margin-bottom: 30px;
-            text-align: center;
-            font-size: 28px;
-        }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        label {
-            display: block;
-            margin-bottom: 8px;
-            color: #555;
-            font-weight: 600;
-            font-size: 14px;
-        }
-        
-        input[type="text"],
-        textarea {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 6px;
-            font-size: 14px;
-            font-family: inherit;
-            transition: border-color 0.3s;
-        }
-        
-        input[type="text"]:focus,
-        textarea:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        
-        textarea {
-            resize: vertical;
-            min-height: 80px;
-        }
-        
-        .options-container {
-            margin-top: 20px;
-        }
-        
-        .option-item {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 12px;
-            align-items: center;
-        }
-        
-        .option-item input {
-            flex: 1;
-        }
-        
-        .option-item button {
-            padding: 10px 12px;
-            background: #ff6b6b;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: background 0.3s;
-        }
-        
-        .option-item button:hover {
-            background: #ff5252;
-        }
-        
-        .btn-container {
-            display: flex;
-            gap: 10px;
-            margin-top: 20px;
-        }
-        
-        button {
-            flex: 1;
-            padding: 12px;
-            border: none;
-            border-radius: 6px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        
-        .btn-primary {
-            background: #667eea;
-            color: white;
-        }
-        
-        .btn-primary:hover {
-            background: #5568d3;
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
-        }
-        
-        .btn-secondary {
-            background: #f0f0f0;
-            color: #333;
-            flex: 0 1 auto;
-        }
-        
-        .btn-secondary:hover {
-            background: #e0e0e0;
-        }
-        
-        .response-message {
-            margin-top: 20px;
-            padding: 15px;
-            border-radius: 6px;
-            text-align: center;
-            display: none;
-        }
-        
-        .response-message.success {
-            background: #d4edda;
-            color: #155724;
-            display: block;
-        }
-        
-        .response-message.error {
-            background: #f8d7da;
-            color: #721c24;
-            display: block;
-        }
-        
-        .option-count {
-            font-size: 12px;
-            color: #999;
-            margin-top: 10px;
-        }
-        
-        .loading {
-            display: none;
-            text-align: center;
-            color: #667eea;
-        }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/animations.css') }}">
 </head>
 <body>
     <div class="container">
-        <h1>📊 Create a Poll</h1>
-        
-        <form id="poll-form">
-            <div class="form-group">
-                <label for="question">Poll Question</label>
-                <textarea 
-                    id="question" 
-                    placeholder="What would you like to ask the community?" 
-                    required
-                ></textarea>
-            </div>
-            
-            <div class="options-container">
-                <label>Poll Options (2-5 required)</label>
-                <div id="options-list"></div>
-                <button type="button" id="add-option-btn" class="btn-secondary" style="width: 100%; margin-top: 10px;">
-                    + Add Option
+        <aside class="sidebar">
+            <div class="logo">🌉 Bridge 2026</div>
+            <nav class="nav-links">
+                <a href="/" class="nav-link">📊 Dashboard</a>
+                <a href="#" class="nav-link active">✏️ Create Poll</a>
+            </nav>
+            <div class="sidebar-bottom">
+                <button class="theme-toggle" onclick="toggleTheme()">
+                    <span id="theme-icon">🌙</span>
+                    <span style="font-size:0.8125rem;">Theme</span>
                 </button>
-                <div class="option-count">
-                    <span id="option-count">0</span> options (max 5)
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <h1 class="section-title">✏️ Create a Poll</h1>
+
+            <div class="panel-grid" style="max-width:700px;">
+                <div class="card">
+                    <h3 class="card-title">New Poll</h3>
+                    <form id="poll-form">
+                        <div style="display:flex;flex-direction:column;gap:12px;">
+                            <div>
+                                <label for="question" style="display:block;margin-bottom:6px;font-weight:600;color:var(--color-text);">Poll Question</label>
+                                <textarea id="question" class="search-input" placeholder="What would you like to ask the community?" required style="min-height:80px;resize:vertical;"></textarea>
+                            </div>
+
+                            <div>
+                                <label style="display:block;margin-bottom:6px;font-weight:600;color:var(--color-text);">Poll Options (2-5 required)</label>
+                                <div id="options-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+                                <button type="button" id="add-option-btn" class="btn btn-secondary" style="width:100%;margin-top:8px;">+ Add Option</button>
+                                <div style="font-size:0.8rem;color:var(--color-text-muted);margin-top:4px;">
+                                    <span id="option-count">0</span> options (max 5)
+                                </div>
+                            </div>
+
+                            <div style="display:flex;gap:12px;margin-top:12px;">
+                                <button type="submit" class="btn btn-primary">Create Poll</button>
+                                <button type="reset" class="btn btn-secondary">Clear</button>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="response-message" style="margin-top:12px;padding:12px;border-radius:8px;display:none;"></div>
+                    <div id="loading" style="display:none;text-align:center;color:var(--color-primary);margin-top:12px;">Creating poll...</div>
                 </div>
             </div>
-            
-            <div class="btn-container">
-                <button type="submit" class="btn-primary">Create Poll</button>
-                <button type="reset" class="btn-secondary">Clear</button>
-            </div>
-        </form>
-        
-        <div id="response-message" class="response-message"></div>
-        <div class="loading" id="loading">Creating poll...</div>
+        </main>
     </div>
 
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
     <script>
         const MAX_OPTIONS = 5;
         const MIN_OPTIONS = 2;
-        
+
         function updateOptionCount() {
             const count = document.querySelectorAll('.option-item').length;
             document.getElementById('option-count').textContent = count;
             document.getElementById('add-option-btn').disabled = count >= MAX_OPTIONS;
         }
-        
-        function addOption(value = '') {
+
+        function addOption(value) {
+            if (value === undefined) value = '';
             const container = document.getElementById('options-list');
             const index = container.children.length;
-            
             if (index >= MAX_OPTIONS) return;
-            
-            const optionItem = document.createElement('div');
-            optionItem.className = 'option-item';
-            optionItem.innerHTML = `
-                <input 
-                    type="text" 
-                    class="option-input" 
-                    placeholder="Option ${index + 1}" 
-                    value="${value}"
-                    required
-                />
-                <button type="button" class="remove-option" onclick="removeOption(this)">✕</button>
-            `;
-            
-            container.appendChild(optionItem);
+            const div = document.createElement('div');
+            div.className = 'option-item';
+            div.style.cssText = 'display:flex;gap:10px;margin-bottom:8px;align-items:center;';
+            div.innerHTML = '<input type="text" class="option-input" placeholder="Option ' + (index + 1) + '" value="' + value + '" required style="flex:1;"><button type="button" class="btn btn-secondary" style="padding:8px 10px;font-size:0.85rem;" onclick="this.parentElement.remove();updateOptionCount()">✕</button>';
+            container.appendChild(div);
             updateOptionCount();
         }
-        
-        function removeOption(btn) {
-            btn.parentElement.remove();
-            updateOptionCount();
-        }
-        
-        function showMessage(message, isError = false) {
-            const messageEl = document.getElementById('response-message');
-            messageEl.textContent = message;
-            messageEl.className = `response-message ${isError ? 'error' : 'success'}`;
-            
+
+        function showMessage(msg, isError) {
+            const el = document.getElementById('response-message');
+            el.textContent = msg;
+            el.style.display = 'block';
+            el.style.backgroundColor = isError ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)';
+            el.style.color = isError ? '#ef4444' : '#22c55e';
+            el.style.border = isError ? '1px solid #ef4444' : '1px solid #22c55e';
             if (!isError) {
-                setTimeout(() => {
-                    messageEl.className = 'response-message';
-                    document.getElementById('poll-form').reset();
-                    document.getElementById('options-list').innerHTML = '';
-                    addOption();
-                    addOption();
-                }, 3000);
+                setTimeout(function() { el.style.display = 'none'; }, 3000);
             }
         }
-        
-        // Add initial options
-        document.addEventListener('DOMContentLoaded', () => {
-            addOption();
-            addOption();
-        });
-        
-        // Add option button
-        document.getElementById('add-option-btn').addEventListener('click', (e) => {
-            e.preventDefault();
-            addOption();
-        });
-        
-        // Form submission
-        document.getElementById('poll-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const question = document.getElementById('question').value.trim();
-            const optionInputs = document.querySelectorAll('.option-input');
-            const options = Array.from(optionInputs).map(input => input.value.trim()).filter(Boolean);
-            
-            // Validate
-            if (!question) {
-                showMessage('Please enter a question', true);
-                return;
-            }
-            
-            if (options.length < MIN_OPTIONS) {
-                showMessage(`Please provide at least ${MIN_OPTIONS} options`, true);
-                return;
-            }
-            
-            // Show loading
-            document.getElementById('loading').style.display = 'block';
-            
-            try {
-                const response = await fetch('/api/polls/create', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        question: question,
-                        options: options
-                    })
-                });
-                
-                document.getElementById('loading').style.display = 'none';
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                    showMessage('✅ Poll created successfully and sent to Discord!');
-                } else {
-                    showMessage(`❌ Error: ${data.error || 'Unknown error'}`, true);
+
+        document.addEventListener('DOMContentLoaded', function() {
+            addOption(); addOption();
+
+            document.getElementById('add-option-btn').addEventListener('click', function(e) {
+                e.preventDefault(); addOption();
+            });
+
+            document.getElementById('poll-form').addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const question = document.getElementById('question').value.trim();
+                const inputs = document.querySelectorAll('.option-input');
+                const options = Array.from(inputs).map(function(i) { return i.value.trim(); }).filter(Boolean);
+
+                if (!question) { showMessage('Please enter a question', true); return; }
+                if (options.length < MIN_OPTIONS) { showMessage('Please provide at least ' + MIN_OPTIONS + ' options', true); return; }
+
+                document.getElementById('loading').style.display = 'block';
+
+                try {
+                    const r = await fetch('/api/polls/create', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ question: question, options: options })
+                    });
+                    document.getElementById('loading').style.display = 'none';
+                    const data = await r.json();
+                    if (r.ok) {
+                        showMessage('✅ Poll created successfully!');
+                        document.getElementById('poll-form').reset();
+                        document.getElementById('options-list').innerHTML = '';
+                        addOption(); addOption();
+                    } else {
+                        showMessage('❌ Error: ' + (data.error || 'Unknown error'), true);
+                    }
+                } catch (err) {
+                    document.getElementById('loading').style.display = 'none';
+                    showMessage('❌ Network error: ' + err.message, true);
                 }
-            } catch (error) {
-                document.getElementById('loading').style.display = 'none';
-                showMessage(`❌ Network error: ${error.message}`, true);
-                console.error('Error:', error);
-            }
+            });
         });
     </script>
 </body>
