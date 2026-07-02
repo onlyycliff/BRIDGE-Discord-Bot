@@ -275,7 +275,7 @@ function renderVoteTable(votes) {
   const tbody = document.querySelector("#vote-log-table tbody");
   if (!tbody) return;
   if (!votes || votes.length === 0) {
-    tbody.innerHTML = "<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--color-text-muted)">No votes yet</td></tr>";
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--color-text-muted)">No votes yet</td></tr>';
     return;
   }
   const fragment = document.createDocumentFragment();
@@ -300,7 +300,7 @@ function renderPagination(total) {
   const container = document.getElementById("pagination");
   if (!container) return;
   if (totalPages <= 1) {
-    container.innerHTML = "<span id="page-info">Page 1 of 1</span>";
+    container.innerHTML = '<span id="page-info">Page 1 of 1</span>';
     return;
   }
   let html = '<button onclick="goToPage(1)" ' + (currentPage === 1 ? "disabled" : "") + '>\u00AB First</button>';
