@@ -19,7 +19,9 @@ logger = logging.getLogger(__name__)
 class ExcelDataManager:
     """Thread-safe Excel data manager with in-memory cache and batched writes"""
 
-    def __init__(self, file_path: str = "responses.xlsx"):
+    def __init__(self, file_path: str = None):
+        if file_path is None:
+            file_path = str(Path(__file__).resolve().parent.parent / "responses.xlsx")
         self.file_path = Path(file_path)
         self.lock = threading.RLock()
         self.main_sheet = "Poll Responses"
@@ -287,7 +289,7 @@ class ExcelDataManager:
                         choice_counts = group['Choice'].value_counts().to_dict()
                     summary[str(question)] = {
                         'Total_Votes': len(group),
-                        'Choices': choice_counts
+                        'choices': choice_counts
                     }
                 return summary
             except Exception as e:
@@ -296,3 +298,4 @@ class ExcelDataManager:
 
 
 excel_manager = ExcelDataManager()
+

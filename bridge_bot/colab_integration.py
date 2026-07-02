@@ -139,7 +139,7 @@ class ColabIntegration:
             data = [["Question", "Total Votes", "Choice", "Count", "Percentage"]]
             
             for question, stats in summary.items():
-                choices = stats.get('Choice', {})
+                choices = stats.get('choices', {})
                 total = stats.get('Total_Votes', 0)
                 
                 first_choice = True
@@ -289,7 +289,7 @@ def generate_report(summary_data):
     for question, stats in summary_data.items():
         print(f"\\nQuestion: {question}")
         print(f"  Total Votes: {stats.get('Total_Votes', 0)}")
-        choices = stats.get('Choice', {})
+        choices = stats.get('choices', {})
         for choice, count in sorted(choices.items(), key=lambda x: x[1], reverse=True):
             percentage = (count / stats.get('Total_Votes', 1) * 100)
             print(f"    - {choice}: {count} ({percentage:.1f}%)")
@@ -367,5 +367,3 @@ def create_visualizations(votes_data):
             'sheets_integration': 'Set GOOGLE_SHEETS_ID environment variable for auto-sync'
         }
 
-# Initialize global Colab integration
-colab_integration = ColabIntegration()

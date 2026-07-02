@@ -78,14 +78,6 @@ def server_error(error):
     logger.error(f"500 error: {error}")
     return {"error": "Internal server error"}, 500
 
-def run_bot_thread():
-    """Run Discord bot in background thread"""
-    try:
-        logger.info("Starting Discord bot...")
-        start_bot()
-    except Exception as e:
-        logger.error(f"Bot error: {e}")
-
 def main():
     """Main entry point"""
     try:
@@ -97,18 +89,6 @@ def main():
     except Exception as e:
         logger.error(f"Failed to start application: {e}")
         raise
-
-
-
-
-
-
-
-
-
-
-
-
 
 if __name__ == '__main__':
     main()
