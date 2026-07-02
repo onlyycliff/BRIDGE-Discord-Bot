@@ -3,43 +3,325 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Bridge 2026 - Create Poll</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            text-align: center;
+            font-size: 28px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        input[type="text"],
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: border-color 0.3s;
+        }
+        
+        input[type="text"]:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        .options-container {
+            margin-top: 20px;
+        }
+        
+        .option-item {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+            align-items: center;
+        }
+        
+        .option-item input {
+            flex: 1;
+        }
+        
+        .option-item button {
+            padding: 10px 12px;
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        
+        .option-item button:hover {
+            background: #ff5252;
+        }
+        
+        .btn-container {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+            flex: 0 1 auto;
+        }
+        
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+        
+        .response-message {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+            display: none;
+        }
+        
+        .response-message.success {
+            background: #d4edda;
+            color: #155724;
+            display: block;
+        }
+        
+        .response-message.error {
+            background: #f8d7da;
+            color: #721c24;
+            display: block;
+        }
+        
+        .option-count {
+            font-size: 12px;
+            color: #999;
+            margin-top: 10px;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            color: #667eea;
+        }
+    </style>
 </head>
 <body>
-    <h1>Create a Poll</h1>
-
-    <input id="question" placeholder="Enter your question"><br><br>
-    <input id="option1" placeholder="Enter option 1"><br><br>
-    <input id="option2" placeholder="Enter option 2"><br><br>
-    <button onclick="submitPoll()">Submit Poll</button>
+    <div class="container">
+        <h1>📊 Create a Poll</h1>
+        
+        <form id="poll-form">
+            <div class="form-group">
+                <label for="question">Poll Question</label>
+                <textarea 
+                    id="question" 
+                    placeholder="What would you like to ask the community?" 
+                    required
+                ></textarea>
+            </div>
+            
+            <div class="options-container">
+                <label>Poll Options (2-5 required)</label>
+                <div id="options-list"></div>
+                <button type="button" id="add-option-btn" class="btn-secondary" style="width: 100%; margin-top: 10px;">
+                    + Add Option
+                </button>
+                <div class="option-count">
+                    <span id="option-count">0</span> options (max 5)
+                </div>
+            </div>
+            
+            <div class="btn-container">
+                <button type="submit" class="btn-primary">Create Poll</button>
+                <button type="reset" class="btn-secondary">Clear</button>
+            </div>
+        </form>
+        
+        <div id="response-message" class="response-message"></div>
+        <div class="loading" id="loading">Creating poll...</div>
+    </div>
 
     <script>
-    function submitPoll() {
-        console.log("Button clicked");
-
-        const data = {
-        question: document.getElementById("question").value,
-        option1: document.getElementById("option1").value,
-        option2: document.getElementById("option2").value
-        };
-
-        console.log(data);
-
-        fetch("/submit", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-        },
-            body: JSON.stringify(data)
-        })
-        .then(response => response.json())
-        .then(result => {
-            console.log(result);
-        })
-        .catch(error => {
-            console.error("Error:", error);
-    });
-}
-</script>
+        const MAX_OPTIONS = 5;
+        const MIN_OPTIONS = 2;
+        
+        function updateOptionCount() {
+            const count = document.querySelectorAll('.option-item').length;
+            document.getElementById('option-count').textContent = count;
+            document.getElementById('add-option-btn').disabled = count >= MAX_OPTIONS;
+        }
+        
+        function addOption(value = '') {
+            const container = document.getElementById('options-list');
+            const index = container.children.length;
+            
+            if (index >= MAX_OPTIONS) return;
+            
+            const optionItem = document.createElement('div');
+            optionItem.className = 'option-item';
+            optionItem.innerHTML = `
+                <input 
+                    type="text" 
+                    class="option-input" 
+                    placeholder="Option ${index + 1}" 
+                    value="${value}"
+                    required
+                />
+                <button type="button" class="remove-option" onclick="removeOption(this)">✕</button>
+            `;
+            
+            container.appendChild(optionItem);
+            updateOptionCount();
+        }
+        
+        function removeOption(btn) {
+            btn.parentElement.remove();
+            updateOptionCount();
+        }
+        
+        function showMessage(message, isError = false) {
+            const messageEl = document.getElementById('response-message');
+            messageEl.textContent = message;
+            messageEl.className = `response-message ${isError ? 'error' : 'success'}`;
+            
+            if (!isError) {
+                setTimeout(() => {
+                    messageEl.className = 'response-message';
+                    document.getElementById('poll-form').reset();
+                    document.getElementById('options-list').innerHTML = '';
+                    addOption();
+                    addOption();
+                }, 3000);
+            }
+        }
+        
+        // Add initial options
+        document.addEventListener('DOMContentLoaded', () => {
+            addOption();
+            addOption();
+        });
+        
+        // Add option button
+        document.getElementById('add-option-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            addOption();
+        });
+        
+        // Form submission
+        document.getElementById('poll-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const question = document.getElementById('question').value.trim();
+            const optionInputs = document.querySelectorAll('.option-input');
+            const options = Array.from(optionInputs).map(input => input.value.trim()).filter(Boolean);
+            
+            // Validate
+            if (!question) {
+                showMessage('Please enter a question', true);
+                return;
+            }
+            
+            if (options.length < MIN_OPTIONS) {
+                showMessage(`Please provide at least ${MIN_OPTIONS} options`, true);
+                return;
+            }
+            
+            // Show loading
+            document.getElementById('loading').style.display = 'block';
+            
+            try {
+                const response = await fetch('/api/polls/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        question: question,
+                        options: options
+                    })
+                });
+                
+                document.getElementById('loading').style.display = 'none';
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showMessage('✅ Poll created successfully and sent to Discord!');
+                } else {
+                    showMessage(`❌ Error: ${data.error || 'Unknown error'}`, true);
+                }
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                showMessage(`❌ Network error: ${error.message}`, true);
+                console.error('Error:', error);
+            }
+        });
+    </script>
 </body>
 </html>
