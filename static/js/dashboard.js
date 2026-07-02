@@ -1,31 +1,5 @@
-/* Bridge 2026 Dashboard - Consolidated */
 const REFRESH_INTERVAL = 5000;
 let refreshIntervalId = null;
-
-// --- Performance Utilities ---
-const memoCache = new Map();
-function memoize(fn, key) {
-  if (memoCache.has(key)) return memoCache.get(key);
-  const result = fn();
-  memoCache.set(key, result);
-  return result;
-}
-
-function debounce(fn, delay) {
-  let timeoutId;
-  return function (...args) {
-    clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => fn(...args), delay);
-  };
-}
-
-function throttle(fn, delay) {
-  let lastCall = 0;
-  return function (...args) {
-    const now = Date.now();
-    if (now - lastCall >= delay) { lastCall = now; fn(...args); }
-  };
-}
 
 const apiCache = new Map();
 const CACHE_DURATION = 30000;
@@ -39,15 +13,14 @@ async function cachedFetch(url) {
   return data;
 }
 
-class BatchDOMUpdater {
-  constructor() { this.updates = []; this.scheduled = false; }
-  add(fn) { this.updates.push(fn); this.scheduleFlush(); }
-  scheduleFlush() { if (!this.scheduled) { this.scheduled = true; requestAnimationFrame(() => this.flush()); } }
-  flush() { this.updates.forEach(fn => fn()); this.updates = []; this.scheduled = false; }
+function debounce(fn, delay) {
+  let timeoutId;
+  return function (...args) {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => fn(...args), delay);
+  };
 }
-const domUpdater = new BatchDOMUpdater();
 
-// --- Theme ---
 function initTheme() {
   const isDark = localStorage.getItem("bridge-theme") === "dark" ||
     (!localStorage.getItem("bridge-theme") && window.matchMedia("(prefers-color-scheme: dark)").matches);
@@ -68,28 +41,71 @@ function updateThemeIcon() {
   const icon = document.getElementById("theme-icon");
   if (!icon) return;
   const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-  icon.textContent = isDark ? "\u2600\uFE0F" : "\uD83C\uDF19";
+  icon.textContent = isDark ? "\u2600" : "\uD83C\uDF19";
 }
 
-// --- Hub / Section Navigation ---
 function showHub() {
   document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
   const hub = document.getElementById("hub");
   if (hub) hub.classList.add("active");
+  loadGitHubProfile();
 }
 
 function showSection(sectionId) {
   document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
   const page = document.getElementById(sectionId);
   if (page) page.classList.add("active");
-
   if (sectionId === "polls") loadPollData();
   if (sectionId === "vote-log") loadVoteLogData();
   if (sectionId === "bot-status") loadBotStatusSection();
   loadHealthData();
 }
 
-// --- Health Data ---
+async function loadGitHubProfile() {
+  const section = document.getElementById("profile-section");
+  if (!section) return;
+  try {
+    const resp = await fetch("/api/github/profile");
+    if (!resp.ok) {
+      section.innerHTML = '<div class="profile-loading">Could not load profile</div>';
+      return;
+    }
+    const data = await resp.json();
+    if (data.error) {
+      section.innerHTML = '<div class="profile-loading">Could not load profile</div>';
+      return;
+    }
+    const repoCards = (data.repos || []).map(r => {
+      const desc = r.description || "";
+      const lang = r.language ? '<span class="repo-lang"><span class="lang-dot"></span>' + escapeHtml(r.language) + "</span>" : "";
+      return '<a href="' + escapeHtml(r.url) + '" target="_blank" class="repo-card">' +
+        '<div class="repo-name">' + escapeHtml(r.name) + "</div>" +
+        (desc ? '<div class="repo-desc">' + escapeHtml(desc) + "</div>" : "") +
+        '<div class="repo-meta">' + lang +
+        '<span>\u2B50 ' + r.stars + "</span>" +
+        "</div></a>";
+    }).join("");
+
+    section.innerHTML =
+      '<div class="profile-row">' +
+      '<img class="profile-avatar" src="' + escapeHtml(data.avatar_url) + '" alt="avatar" />' +
+      '<div class="profile-info">' +
+      '<div class="profile-name">' + escapeHtml(data.name || data.login) + "</div>" +
+      (data.bio ? '<div class="profile-bio">' + escapeHtml(data.bio) + "</div>" : "") +
+      (data.location ? '<div class="profile-location">\uD83D\uDCCD ' + escapeHtml(data.location) + "</div>" : "") +
+      "</div>" +
+      "</div>" +
+      '<div class="stats-row">' +
+      '<div class="stats-item"><span class="stats-num">' + data.public_repos + '</span><span class="stats-label">Repos</span></div>' +
+      '<div class="stats-item"><span class="stats-num">' + data.followers + '</span><span class="stats-label">Followers</span></div>' +
+      '<div class="stats-item"><span class="stats-num">' + data.following + '</span><span class="stats-label">Following</span></div>' +
+      "</div>" +
+      '<div class="repo-grid">' + repoCards + "</div>";
+  } catch (e) {
+    section.innerHTML = '<div class="profile-loading">Could not load profile</div>';
+  }
+}
+
 async function loadHealthData() {
   try {
     const data = await cachedFetch("/api/data/status");
@@ -97,7 +113,6 @@ async function loadHealthData() {
     const lastEl = document.getElementById("health-last");
     const sizeEl = document.getElementById("health-size");
     const cacheEl = document.getElementById("health-cache");
-
     if (recordsEl) recordsEl.textContent = data.total_records + " records";
     if (lastEl) lastEl.textContent = data.last_timestamp !== "N/A" ? new Date(data.last_timestamp).toLocaleString() : "N/A";
     if (sizeEl) sizeEl.textContent = data.file_size;
@@ -107,15 +122,12 @@ async function loadHealthData() {
   }
 }
 
-// --- Animated Counter ---
 function animateCounter(element, target, duration) {
   if (!element) return;
   if (duration === undefined) duration = 800;
   const start = 0;
   const startTime = performance.now();
-
   function easeOutQuad(t) { return t * (2 - t); }
-
   function update(currentTime) {
     const elapsed = currentTime - startTime;
     const progress = Math.min(elapsed / duration, 1);
@@ -126,7 +138,6 @@ function animateCounter(element, target, duration) {
   requestAnimationFrame(update);
 }
 
-// --- Poll Data ---
 let pollChart = null;
 
 async function loadPollData() {
@@ -134,43 +145,36 @@ async function loadPollData() {
     const response = await fetch("/api/polls");
     const polls = await response.json();
     if (!Array.isArray(polls)) return;
-
     const container = document.getElementById("polls-container");
     if (!container) return;
-
     let totalVotes = 0;
     polls.forEach(poll => {
       (poll.options || []).forEach(opt => { totalVotes += opt.votes || 0; });
     });
-
     const activePollsEl = document.getElementById("active-polls-count");
     const totalVotesEl = document.getElementById("total-votes-count");
     const engagementEl = document.getElementById("engagement-rate");
-
     if (activePollsEl) animateCounter(activePollsEl, polls.length);
     if (totalVotesEl) animateCounter(totalVotesEl, totalVotes);
     if (engagementEl) {
       const rate = polls.length > 0 ? Math.min(Math.round((totalVotes / (polls.length * 100)) * 100), 100) : 0;
       engagementEl.textContent = rate + "%";
     }
-
     const fragment = document.createDocumentFragment();
     polls.forEach((poll, index) => {
       const card = createPollCard(poll);
-      card.style.animationDelay = `${index * 50}ms`;
+      card.style.animationDelay = index * 50 + "ms";
       fragment.appendChild(card);
     });
-
     container.innerHTML = "";
     container.appendChild(fragment);
-
     const stream = document.getElementById("polls-stream");
     if (stream) {
       stream.innerHTML = "";
       const streamFragment = document.createDocumentFragment();
       polls.slice(0, 4).forEach((poll, index) => {
         const mini = createPollCard(poll);
-        mini.style.animationDelay = `${index * 50}ms`;
+        mini.style.animationDelay = index * 50 + "ms";
         streamFragment.appendChild(mini);
       });
       stream.appendChild(streamFragment);
@@ -184,43 +188,33 @@ function createPollCard(poll) {
   const card = document.createElement("div");
   card.className = "card";
   card.setAttribute("data-poll-id", poll.poll_id || "");
-
   const options = poll.options || [];
   const totalVotes = options.reduce((sum, o) => sum + (o.votes || 0), 0);
   const maxVotes = Math.max(...options.map(o => o.votes || 0), 1);
   const leadingOption = options.reduce((max, o) => (o.votes || 0) > (max.votes || 0) ? o : max, options[0] || {});
-
   const optionsHTML = options.map(option => {
     const pct = totalVotes > 0 ? ((option.votes / totalVotes) * 100).toFixed(1) : 0;
     const barWidth = maxVotes > 0 ? (option.votes / maxVotes) * 100 : 0;
-    return [
-      '<div class="poll-option">',
-      '<div class="poll-option-label">',
-      '<span>' + escapeHtml(option.name || "") + '</span>',
-      '<span><span class="vote-percentage">' + pct + '</span>%</span>',
-      '</div>',
-      '<div class="poll-bar">',
-      '<div class="poll-bar-fill" style="width: 0%;" data-width="' + barWidth + '">',
-      '<span class="vote-count">' + (option.votes || 0) + '</span>',
-      '</div></div></div>'
-    ].join("");
+    return '<div class="poll-option">' +
+      '<div class="poll-option-label">' +
+      '<span>' + escapeHtml(option.name || "") + "</span>" +
+      '<span><span class="vote-percentage">' + pct + "</span>%</span>" +
+      "</div>" +
+      '<div class="poll-bar">' +
+      '<div class="poll-bar-fill" style="width:0%;" data-width="' + barWidth + '">' +
+      '<span class="vote-count">' + (option.votes || 0) + "</span>" +
+      "</div></div></div>";
   }).join("");
-
   const ts = poll.timestamp ? new Date(poll.timestamp).toLocaleString() : "N/A";
-
-  card.innerHTML = [
-    '<h3 class="card-title">' + escapeHtml(poll.question) + '</h3>',
-    optionsHTML,
-    '<div class="poll-stats">',
-    '<span><strong class="total-votes">0</strong> total votes</span>',
-    '<span>Leading: <strong>' + escapeHtml(leadingOption.name || "") + '</strong></span>',
-    '</div>',
-    '<div class="card-meta">\uD83D\uDCC5 Last updated: ' + ts + '</div>'
-  ].join("");
-
+  card.innerHTML = '<h3 class="card-title">' + escapeHtml(poll.question) + "</h3>" +
+    optionsHTML +
+    '<div class="poll-stats">' +
+    '<span><strong class="total-votes">0</strong> total votes</span>' +
+    '<span>Leading: <strong>' + escapeHtml(leadingOption.name || "") + "</strong></span>" +
+    "</div>" +
+    '<div class="card-meta">\uD83D\uDCC5 Last updated: ' + ts + "</div>";
   card.style.cursor = "pointer";
   card.addEventListener("click", () => openPollModal(poll.poll_id));
-
   requestAnimationFrame(() => {
     card.querySelectorAll(".poll-bar-fill").forEach(bar => {
       bar.style.width = bar.getAttribute("data-width") + "%";
@@ -228,11 +222,9 @@ function createPollCard(poll) {
     const totalSpan = card.querySelector(".total-votes");
     animateCounter(totalSpan, totalVotes);
   });
-
   return card;
 }
 
-// --- Vote Log ---
 let currentPage = 1;
 const ITEMS_PER_PAGE = 25;
 let allVotes = [];
@@ -283,12 +275,10 @@ function renderVoteTable(votes) {
     const tr = document.createElement("tr");
     tr.style.animationDelay = index * 30 + "ms";
     const ts = vote.timestamp ? new Date(vote.timestamp).toLocaleString() : "-";
-    tr.innerHTML = [
-      "<td>\u23F0 " + ts + "</td>",
-      "<td>\uD83D\uDC64 " + escapeHtml(vote.username || "") + "</td>",
-      "<td>\u2753 " + escapeHtml(vote.question || "") + "</td>",
-      "<td><strong>\u2713 " + escapeHtml(vote.choice || "") + "</strong></td>"
-    ].join("");
+    tr.innerHTML = "<td>\u23F0 " + ts + "</td>" +
+      "<td>\uD83D\uDC64 " + escapeHtml(vote.username || "") + "</td>" +
+      "<td>\u2753 " + escapeHtml(vote.question || "") + "</td>" +
+      "<td><strong>\u2713 " + escapeHtml(vote.choice || "") + "</strong></td>";
     fragment.appendChild(tr);
   });
   tbody.innerHTML = "";
@@ -303,13 +293,13 @@ function renderPagination(total) {
     container.innerHTML = '<span id="page-info">Page 1 of 1</span>';
     return;
   }
-  let html = '<button onclick="goToPage(1)" ' + (currentPage === 1 ? "disabled" : "") + '>\u00AB First</button>';
-  html += '<button onclick="goToPage(' + (currentPage - 1) + ')" ' + (currentPage === 1 ? "disabled" : "") + '>\u2039 Prev</button>';
+  let html = '<button onclick="goToPage(1)" ' + (currentPage === 1 ? "disabled" : "") + ">\u00AB First</button>";
+  html += '<button onclick="goToPage(' + (currentPage - 1) + ')" ' + (currentPage === 1 ? "disabled" : "") + ">\u2039 Prev</button>";
   for (let i = Math.max(1, currentPage - 2); i <= Math.min(totalPages, currentPage + 2); i++) {
     html += '<button onclick="goToPage(' + i + ')" class="' + (i === currentPage ? "active" : "") + '">' + i + "</button>";
   }
-  html += '<button onclick="goToPage(' + (currentPage + 1) + ')" ' + (currentPage === totalPages ? "disabled" : "") + '>Next \u203A</button>';
-  html += '<button onclick="goToPage(' + totalPages + ')" ' + (currentPage === totalPages ? "disabled" : "") + '>Last \u00BB</button>';
+  html += '<button onclick="goToPage(' + (currentPage + 1) + ')" ' + (currentPage === totalPages ? "disabled" : "") + ">Next \u203A</button>";
+  html += '<button onclick="goToPage(' + totalPages + ')" ' + (currentPage === totalPages ? "disabled" : "") + ">Last \u00BB</button>";
   container.innerHTML = html;
   const pageInfo = document.getElementById("page-info");
   if (pageInfo) pageInfo.textContent = "Page " + currentPage + " of " + totalPages;
@@ -320,7 +310,6 @@ function goToPage(page) {
   loadVoteLogData();
 }
 
-// --- Bot Status ---
 async function loadBotStatus() {
   try {
     const status = await cachedFetch("/api/bot-status");
@@ -344,22 +333,18 @@ async function loadBotStatusSection() {
     const status = await cachedFetch("/api/bot-status");
     const container = document.getElementById("bot-status-container");
     if (!container) return;
-
-    container.innerHTML = [
-      '<div class="card" style="max-width:600px;">',
-      '<h3 class="card-title">\uD83E\uDD16 Discord Bot</h3>',
-      '<div class="status-indicator">',
-      '<div class="status-dot ' + (status.online ? "online" : "offline") + '"></div>',
-      '<span style="font-weight:600;">' + (status.online ? "\uD83D\uDFE2 Online" : "\uD83D\uDD34 Offline") + "</span>",
-      "</div>",
-      '<div class="status-info">',
-      '<div class="status-row"><span class="status-label">\u23F1\uFE0F Uptime:</span><span class="status-value">' + (status.uptime || "N/A") + "</span></div>",
-      '<div class="status-row"><span class="status-label">\uD83C\uDFAF Total Votes:</span><span class="status-value"><span class="votes-total">0</span></span></div>',
-      '<div class="status-row"><span class="status-label">\uD83D\uDCCA Today\'s Votes:</span><span class="status-value"><span class="votes-today">0</span></span></div>',
-      '<div class="status-row"><span class="status-label">\uD83D\uDDA5\uFE0F Latency:</span><span class="status-value">' + (status.latency_ms || 0) + "ms</span></div>",
-      "</div></div>"
-    ].join("");
-
+    container.innerHTML = '<div class="card" style="max-width:600px;">' +
+      '<h3 class="card-title">\uD83E\uDD16 Discord Bot</h3>' +
+      '<div class="status-indicator">' +
+      '<div class="status-dot ' + (status.online ? "online" : "offline") + '"></div>' +
+      '<span style="font-weight:600;">' + (status.online ? "\uD83D\uDFE2 Online" : "\uD83D\uDD34 Offline") + "</span>" +
+      "</div>" +
+      '<div class="status-info">' +
+      '<div class="status-row"><span class="status-label">\u23F1\uFE0F Uptime:</span><span class="status-value">' + (status.uptime || "N/A") + "</span></div>" +
+      '<div class="status-row"><span class="status-label">\uD83C\uDFAF Total Votes:</span><span class="status-value"><span class="votes-total">0</span></span></div>" +
+      '<div class="status-row"><span class="status-label">\uD83D\uDCCA Today\'s Votes:</span><span class="status-value"><span class="votes-today">0</span></span></div>" +
+      '<div class="status-row"><span class="status-label">\uD83D\uDDA5\uFE0F Latency:</span><span class="status-value">' + (status.latency_ms || 0) + "ms</span></div>" +
+      "</div></div>";
     requestAnimationFrame(() => {
       const todaySpan = container.querySelector(".votes-today");
       const totalSpan = container.querySelector(".votes-total");
@@ -371,14 +356,12 @@ async function loadBotStatusSection() {
   }
 }
 
-// --- Poll Modal (Chart.js + Voter Breakdown) ---
 let pollChartInstance = null;
 
 async function openPollModal(pollId) {
   const modal = document.getElementById("poll-modal");
   const title = document.getElementById("modal-title");
   if (!modal || !title) return;
-
   try {
     const resp = await fetch("/api/polls/" + pollId);
     const data = await resp.json();
@@ -386,21 +369,16 @@ async function openPollModal(pollId) {
       title.textContent = "Error loading poll";
       return;
     }
-
     title.textContent = data.question || "Poll";
     modal.setAttribute("aria-hidden", "false");
     modal.classList.add("open");
-
     const ctx = document.getElementById("poll-chart-canvas");
     if (!ctx) return;
     const canvas = ctx.getContext("2d");
-
     const labels = (data.options || []).map(o => o.name || "");
     const chartData = (data.options || []).map(o => o.votes || 0);
     const colors = ["#6366F1", "#8B5CF6", "#EC4899", "#F59E0B", "#22C55E"];
-
     if (pollChartInstance) pollChartInstance.destroy();
-
     pollChartInstance = new Chart(canvas, {
       type: "bar",
       data: {
@@ -409,7 +387,7 @@ async function openPollModal(pollId) {
           label: "Votes",
           data: chartData,
           backgroundColor: labels.map(function(_, i) { return colors[i % colors.length]; }),
-          borderRadius: 8,
+          borderRadius: 6,
           borderSkipped: false
         }]
       },
@@ -417,7 +395,7 @@ async function openPollModal(pollId) {
         indexAxis: "y",
         responsive: true,
         maintainAspectRatio: true,
-        animation: { duration: 600, easing: "easeOutQuart" },
+        animation: { duration: 500, easing: "easeOutQuart" },
         scales: {
           x: { beginAtZero: true, ticks: { stepSize: 1, color: "#94A3B8" }, grid: { color: "rgba(148,163,184,0.15)" } },
           y: { ticks: { color: "#94A3B8" }, grid: { display: false } }
@@ -427,58 +405,67 @@ async function openPollModal(pollId) {
         }
       }
     });
-
     const preview = document.getElementById("live-poll-preview");
     if (preview) {
-      preview.innerHTML = "<strong>" + escapeHtml(data.question) + '</strong><div style="margin-top:8px;color:var(--color-text-muted)">Click the chart to open full view</div>';
+      preview.innerHTML = "<strong>" + escapeHtml(data.question) + '</strong><div style="margin-top:6px;color:var(--color-text-muted);font-size:0.8125rem;">Click chart for full view</div>';
     }
-
+    renderVoterMatrix(data.voters_by_choice || {});
     renderVoterBreakdown(data.voters_by_choice || {});
-
     const refreshBtn = document.getElementById("refresh-poll-data");
     if (refreshBtn) {
       refreshBtn.onclick = function() { openPollModal(pollId); };
     }
-
   } catch (error) {
     console.error("Error opening poll modal:", error);
     title.textContent = "Error loading poll";
   }
 }
 
+function renderVoterMatrix(votersByChoice) {
+  const container = document.getElementById("voter-matrix-table");
+  if (!container) return;
+  const entries = Object.keys(votersByChoice);
+  if (entries.length === 0) {
+    container.innerHTML = '<p style="color:var(--color-text-muted);font-size:0.8125rem;">No voter data available.</p>';
+    return;
+  }
+  let rows = '<table class="matrix-table"><thead><tr><th>Option</th><th>Voters</th></tr></thead><tbody>';
+  entries.forEach(choice => {
+    const voters = votersByChoice[choice] || [];
+    const voterList = voters.length > 0 ? voters.map(v => '<span class="matrix-voter">' + escapeHtml(v) + "</span>").join(" ") : '<span style="color:var(--color-text-muted)">No voters yet</span>';
+    rows += "<tr><td><strong>" + escapeHtml(choice) + "</strong></td><td>" + voterList + "</td></tr>";
+  });
+  rows += "</tbody></table>";
+  container.innerHTML = rows;
+}
+
 function renderVoterBreakdown(votersByChoice) {
   const container = document.getElementById("voter-breakdown-content");
   if (!container) return;
-
   var entries = Object.keys(votersByChoice);
   if (entries.length === 0) {
-    container.innerHTML = '<p style="color:var(--color-text-muted);font-size:0.875rem;">No voter data available yet.</p>';
+    container.innerHTML = '<p style="color:var(--color-text-muted);font-size:0.8125rem;">No voter data available yet.</p>';
     return;
   }
-
   container.innerHTML = "";
   entries.forEach(function(choice, idx) {
     var voters = votersByChoice[choice];
     var section = document.createElement("div");
     section.className = "voter-section";
-    section.style.animationDelay = (idx * 80) + "ms";
-
+    section.style.animationDelay = idx * 80 + "ms";
     var voterList = "";
     if (voters && voters.length > 0) {
       voterList = voters.map(function(v) {
         return '<span class="voter-tag">' + escapeHtml(v) + "</span>";
       }).join("");
     } else {
-      voterList = '<span style="color:var(--color-text-muted);font-size:0.8125rem;">No voters yet</span>';
+      voterList = '<span style="color:var(--color-text-muted);font-size:0.75rem;">No voters yet</span>';
     }
-
-    section.innerHTML = [
-      '<div class="voter-section-header">',
-      '<span class="voter-section-name">' + escapeHtml(choice) + "</span>",
-      '<span class="voter-section-count">' + voters.length + " voter" + (voters.length !== 1 ? "s" : "") + "</span>",
-      "</div>",
-      '<div class="voter-tags">' + voterList + "</div>"
-    ].join("");
+    section.innerHTML = '<div class="voter-section-header">' +
+      '<span class="voter-section-name">' + escapeHtml(choice) + "</span>" +
+      '<span class="voter-section-count">' + voters.length + " voter" + (voters.length !== 1 ? "s" : "") + "</span>" +
+      "</div>" +
+      '<div class="voter-tags">' + voterList + "</div>";
     container.appendChild(section);
   });
 }
@@ -490,20 +477,16 @@ function closePollModal() {
   modal.classList.remove("open");
 }
 
-// --- Poll Creation ---
 async function submitPollForm(e) {
   e.preventDefault();
   const q = document.getElementById("poll-question");
   const resp = document.getElementById("create-response");
   if (!q || !resp) return;
-
   const question = q.value.trim();
   const optionInputs = document.querySelectorAll(".poll-option-input");
   const options = Array.from(optionInputs).map(function(i) { return i.value.trim(); }).filter(Boolean);
-
   if (!question) { resp.textContent = "Please enter a question."; return; }
   if (options.length < 2) { resp.textContent = "Please provide at least 2 options."; return; }
-
   try {
     const r = await fetch("/api/polls/create", {
       method: "POST",
@@ -536,10 +519,8 @@ function addPollOption(value) {
   if (idx >= MAX) return;
   var div = document.createElement("div");
   div.style.cssText = "display:flex;gap:8px;align-items:center;";
-  div.innerHTML = [
-    '<input type="text" class="poll-option-input search-input" placeholder="Option ' + (idx + 1) + '" value="' + value + '" required style="flex:1;">',
-    '<button type="button" class="btn btn-secondary" style="padding:8px 10px;font-size:0.85rem;" onclick="this.parentElement.remove();updatePollOptionCount()">\u2715</button>'
-  ].join("");
+  div.innerHTML = '<input type="text" class="poll-option-input search-input" placeholder="Option ' + (idx + 1) + '" value="' + value + '" required style="flex:1;">' +
+    '<button type="button" class="btn btn-secondary" style="padding:6px 10px;font-size:0.8rem;" onclick="this.parentElement.remove();updatePollOptionCount()">\u2715</button>';
   container.appendChild(div);
   updatePollOptionCount();
 }
@@ -552,23 +533,15 @@ function updatePollOptionCount() {
   if (btn) btn.disabled = count >= 5;
 }
 
-// --- CSV Export ---
-async function exportCSV() {
-  try {
-    const resp = await fetch("/api/export/csv");
-    const data = await resp.json();
-    if (resp.ok) {
-      alert("\u2705 Data exported to: " + data.file);
-    } else {
-      alert("\u274C Export failed: " + data.error);
-    }
-  } catch (err) {
-    console.error(err);
-    alert("\u274C Error exporting CSV");
-  }
+function exportCSV() {
+  var a = document.createElement("a");
+  a.href = "/api/export/csv";
+  a.download = "poll_feedback.csv";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
-// --- Auto Refresh ---
 function startAutoRefresh() {
   if (refreshIntervalId) clearInterval(refreshIntervalId);
   refreshIntervalId = setInterval(function() {
@@ -597,7 +570,6 @@ function updateAllData() {
   if (active.id === "bot-status") loadBotStatusSection();
 }
 
-// --- Utility ---
 function escapeHtml(text) {
   if (!text) return "";
   var d = document.createElement("div");
@@ -605,12 +577,11 @@ function escapeHtml(text) {
   return d.innerHTML;
 }
 
-// --- Initialization ---
 document.addEventListener("DOMContentLoaded", function () {
   initTheme();
   loadBotStatus();
   loadHealthData();
-  showSection("polls");
+  loadGitHubProfile();
 
   const form = document.getElementById("create-poll-form");
   if (form) form.addEventListener("submit", submitPollForm);
