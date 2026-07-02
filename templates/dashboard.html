@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -8,6 +8,25 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
+<!-- INTRO OVERLAY -->
+<div id="intro-overlay" onclick="dismissIntro()">
+  <div class="intro-content">
+    <div class="intro-emoji">🌉</div>
+    <h1 class="intro-title">Bridge 2026 VII</h1>
+    <p class="intro-subtitle">Summer Program</p>
+    <p class="intro-hint">Click anywhere to enter</p>
+  </div>
+</div>
+
+<!-- LOADING SCREEN -->
+<div id="loading-screen">
+  <div class="loader-content">
+    <div class="loader-emoji">🌉</div>
+    <div class="loader-bar-track"><div class="loader-bar-fill"></div></div>
+    <p class="loader-text">Loading dashboard...</p>
+  </div>
+</div>
+
   <div class="app">
 
     <!-- HUB / LANDING PAGE -->
@@ -17,7 +36,7 @@
       <div class="status-dot online" style="width:8px;height:8px;margin:0;"></div>
       <span class="status-text" style="color:var(--color-text-muted);font-weight:500;">Online</span>
     </div>
-    <span id="theme-icon" onclick="toggleTheme()" style="cursor:pointer;">☀️</span>
+    <span id="theme-icon" onclick="toggleTheme()" style="cursor:pointer;">â˜€ï¸</span>
   </div>
 
       <!-- Profile Section -->
@@ -146,10 +165,6 @@
           <div id="create-response" style="margin-top:10px;font-size:0.8125rem;color:var(--color-text-muted)"></div>
         </div>
 
-        <div class="card">
-          <h3 class="card-title">Live Poll Preview</h3>
-          <div id="live-poll-preview" style="min-height:180px;display:flex;align-items:center;justify-content:center;color:var(--color-text-muted);font-size:0.875rem;">Select a poll card to view an interactive chart</div>
-        </div>
       </div>
 
       <div style="margin-top:20px;">
@@ -187,3 +202,4 @@
   <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 </body>
 </html>
+

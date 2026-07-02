@@ -445,10 +445,6 @@ async function openPollModal(pollId) {
         }
       }
     });
-    const preview = document.getElementById("live-poll-preview");
-    if (preview) {
-      preview.innerHTML = "<strong>" + escapeHtml(data.question) + '</strong><div style="margin-top:6px;color:var(--color-text-muted);font-size:0.8125rem;">Click chart for full view</div>';
-    }
     renderVoterMatrix(data.voters_by_choice || {});
     const refreshBtn = document.getElementById("refresh-poll-data");
     if (refreshBtn) {
@@ -600,12 +596,29 @@ function escapeHtml(text) {
   return d.innerHTML;
 }
 
+function dismissIntro() {
+  var overlay = document.getElementById("intro-overlay");
+  if (!overlay) return;
+  overlay.classList.add("hidden");
+  var loader = document.getElementById("loading-screen");
+  if (loader) loader.classList.add("active");
+
+  Promise.all([
+    loadBotStatus().catch(function(){}),
+    loadHealthData().catch(function(){}),
+    loadGitHubProfile().catch(function(){})
+  ]).then(function () {
+    if (loader) loader.classList.remove("active");
+    var app = document.querySelector(".app");
+    if (app) app.classList.add("visible");
+    startAutoRefresh();
+  });
+}
+
 document.addEventListener("DOMContentLoaded", function () {
   initTheme();
-  loadBotStatus();
-  loadHealthData();
-  loadGitHubProfile();
 
+  // Bind form handlers (data loads after intro dismissal)
   const form = document.getElementById("create-poll-form");
   if (form) form.addEventListener("submit", submitPollForm);
 
@@ -626,6 +639,5 @@ document.addEventListener("DOMContentLoaded", function () {
   document.addEventListener("visibilitychange", function () {
     if (document.hidden) stopAutoRefresh(); else { updateAllData(); startAutoRefresh(); }
   });
-
-  startAutoRefresh();
 });
+
