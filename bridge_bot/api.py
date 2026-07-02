@@ -5,8 +5,8 @@ from typing import List, Dict, Optional
 from datetime import datetime
 from flask import Blueprint, jsonify, request, send_file
 import requests
-from .excel_manager import excel_manager
-from .bot import send_poll
+from bridge_bot.excel_manager import excel_manager
+from bridge_bot.bot import send_poll
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ def create_poll():
             return jsonify({"error": "Need at least 2 unique options"}), 400
 
         try:
-            from .bot import bot
+            from bridge_bot.bot import bot
 
             if not bot or not bot.is_ready():
                 logger.warning("Bot not ready for poll creation")
@@ -101,7 +101,7 @@ def list_polls():
     try:
         polls = excel_manager.get_all_polls()
         try:
-            from .bot import poll_state
+            from bridge_bot.bot import poll_state
             for p in polls:
                 p['active'] = poll_state.is_active(p.get('poll_id'))
         except Exception:
@@ -120,7 +120,7 @@ def get_poll_detail(poll_id: int):
         if not stats:
             return jsonify({"error": "Poll not found"}), 404
 
-        from .bot import poll_state
+        from bridge_bot.bot import poll_state
         is_active = poll_state.is_active(poll_id)
 
         options_list = [
@@ -144,7 +144,7 @@ def get_poll_detail(poll_id: int):
 @api.route('/polls/<int:poll_id>/end', methods=['POST'])
 def end_poll(poll_id: int):
     try:
-        from .bot import poll_state
+        from bridge_bot.bot import poll_state
         if not poll_state.end_poll(poll_id):
             return jsonify({"error": "Poll not found or already ended"}), 404
         logger.info(f"Poll {poll_id} ended via API")
@@ -199,7 +199,7 @@ def get_votes_paginated():
 @api.route('/bot-status', methods=['GET'])
 def get_bot_status():
     try:
-        from .bot import bot, poll_state, start_time
+        from bridge_bot.bot import bot, poll_state, start_time
 
         online = bot is not None and bot.is_ready()
 

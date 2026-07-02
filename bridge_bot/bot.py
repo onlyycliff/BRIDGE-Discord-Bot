@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 import os
 from datetime import datetime
 from typing import Dict, Set, List, Optional
-from .excel_manager import excel_manager
+from bridge_bot.excel_manager import excel_manager
 
 logging.basicConfig(
     level=logging.INFO,
