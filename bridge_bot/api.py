@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+import os
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import logging
@@ -407,9 +408,9 @@ def get_dashboard_overview():
 @api.route('/github/profile', methods=['GET'])
 def github_profile():
     try:
-        user_resp = requests.get("https://api.github.com/users/onlyycliff", timeout=10)
-        repos_resp = requests.get("https://api.github.com/users/onlyycliff/repos?sort=updated&per_page=10", timeout=10)
-
+        username = os.getenv("GITHUB_USERNAME", "onlyycliff")
+        user_resp = requests.get(f"https://api.github.com/users/{username}", timeout=10)
+        repos_resp = requests.get(f"https://api.github.com/users/{username}/repos?sort=updated&per_page=10", timeout=10)
         if user_resp.status_code != 200:
             return jsonify({"error": "Failed to fetch GitHub profile"}), 502
 
