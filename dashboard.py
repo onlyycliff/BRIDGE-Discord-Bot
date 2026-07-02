@@ -21,6 +21,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+def run_bot_thread():
+    """Run Discord bot in background thread"""
+    try:
+        logger.info("Starting Discord bot...")
+        start_bot()
+    except Exception as e:
+        logger.error(f"Bot error: {e}")
+
 # Initialize Flask application
 app = Flask(__name__, template_folder='templates', static_folder='static')
 dashboard = app
