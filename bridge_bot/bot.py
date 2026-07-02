@@ -28,7 +28,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 start_time = None
 
-CHANNEL_ID = int(os.getenv("POLL_CHANNEL_ID", "1519291160240066650"))
+CHANNEL_ID = int(os.getenv("POLL_CHANNEL_ID"))
 RULES_CHANNEL_NAME = os.getenv("RULES_CHANNEL_NAME", "\U0001f4dc\uff5crules")
 INDIGO = 0x6366F1
 
@@ -394,31 +394,17 @@ async def on_ready():
         logger.error(f"Error in on_ready event: {e}")
 
 
-@bot.event
-async def on_reaction_add(reaction: discord.Reaction, user: discord.User):
-    try:
-        if user == bot.user:
-            return
-
-        message = reaction.message
-
-        if message.author != bot.user or "\U0001f4ca" not in message.content:
-            return
-
-        user_id = user.id
-        message_id = message.id
-
-        logger.debug(f"Reaction detected - User: {user.display_name}, Emoji: {reaction.emoji}, Message: {message_id}")
-
-    except Exception as e:
-        logger.error(f"Error handling reaction: {e}")
-
-
 def start_bot() -> None:
     token = os.getenv("TOKEN")
     if not token:
         logger.error("Discord bot token not found in environment variables")
         raise ValueError("Missing TOKEN environment variable")
 
+    channel_id_str = os.getenv("POLL_CHANNEL_ID")
+    if not channel_id_str:
+        logger.error("POLL_CHANNEL_ID not set in environment variables")
+        raise ValueError("Missing POLL_CHANNEL_ID environment variable")
+
     logger.info("Starting Bridge Bot...")
     bot.run(token)
+
