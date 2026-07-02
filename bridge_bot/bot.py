@@ -216,12 +216,19 @@ async def send_poll(question: str, options: List[str]) -> bool:
         embed.set_footer(text="BRIDGE 2026 Feedback System")
         embed.timestamp = datetime.now()
         
-        await channel.send(embed=embed, view=view)
-        logger.info(f"Poll created - Question: {question}, Options: {len(options)}, Poll ID: {view.poll_id}")
+        # Send poll with error handling
+        msg = await channel.send(embed=embed, view=view)
+        logger.info(f"Poll created - Question: {question}, Options: {len(options)}, Poll ID: {view.poll_id}, Message ID: {msg.id}")
         return True
         
+    except discord.Forbidden:
+        logger.error(f"Permission denied sending poll to channel {CHANNEL_ID}")
+        return False
+    except discord.HTTPException as e:
+        logger.error(f"Discord HTTP error sending poll: {e}", exc_info=True)
+        return False
     except Exception as e:
-        logger.error(f"Error sending poll: {e}")
+        logger.error(f"Error sending poll: {e}", exc_info=True)
         return False
 
 def build_rules_embed() -> discord.Embed:
