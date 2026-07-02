@@ -100,6 +100,13 @@ def create_poll():
 def list_polls():
     try:
         polls = excel_manager.get_all_polls()
+        try:
+            from .bot import poll_state
+            for p in polls:
+                p['active'] = poll_state.is_active(p.get('poll_id'))
+        except Exception:
+            for p in polls:
+                p['active'] = True
         return jsonify(polls), 200
     except Exception as e:
         logger.error(f"Error listing polls: {e}", exc_info=True)
@@ -113,6 +120,9 @@ def get_poll_detail(poll_id: int):
         if not stats:
             return jsonify({"error": "Poll not found"}), 404
 
+        from .bot import poll_state
+        is_active = poll_state.is_active(poll_id)
+
         options_list = [
             {"name": choice, "votes": count}
             for choice, count in stats.get("choices", {}).items()
@@ -123,10 +133,24 @@ def get_poll_detail(poll_id: int):
             "question": stats.get("question", "Unknown"),
             "options": options_list,
             "total_votes": stats.get("total_votes", 0),
+            "active": is_active,
             "voters_by_choice": stats.get("voters_by_choice", {})
         }), 200
     except Exception as e:
         logger.error(f"Error getting poll detail: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@api.route('/polls/<int:poll_id>/end', methods=['POST'])
+def end_poll(poll_id: int):
+    try:
+        from .bot import poll_state
+        if not poll_state.end_poll(poll_id):
+            return jsonify({"error": "Poll not found or already ended"}), 404
+        logger.info(f"Poll {poll_id} ended via API")
+        return jsonify({"success": True, "message": f"Poll {poll_id} ended"}), 200
+    except Exception as e:
+        logger.error(f"Error ending poll: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 

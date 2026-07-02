@@ -13,14 +13,6 @@ async function cachedFetch(url) {
   return data;
 }
 
-function debounce(fn, delay) {
-  let timeoutId;
-  return function (...args) {
-    clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => fn(...args), delay);
-  };
-}
-
 function initTheme() {
   const isDark = localStorage.getItem("bridge-theme") === "dark" ||
     (!localStorage.getItem("bridge-theme") && window.matchMedia("(prefers-color-scheme: dark)").matches);
@@ -55,7 +47,7 @@ function showSection(sectionId) {
   document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
   const page = document.getElementById(sectionId);
   if (page) page.classList.add("active");
-  if (sectionId === "polls") loadPollData();
+  if (sectionId === "polls" || sectionId === "interactive") loadPollData();
   if (sectionId === "vote-log") loadVoteLogData();
   if (sectionId === "bot-status") loadBotStatusSection();
   loadHealthData();
@@ -65,6 +57,10 @@ async function loadGitHubProfile() {
   const section = document.getElementById("profile-section");
   if (!section) return;
   try {
+    if (githubProfileData) {
+      renderGitHubProfile(githubProfileData);
+      return;
+    }
     const resp = await fetch("/api/github/profile");
     if (!resp.ok) {
       section.innerHTML = '<div class="profile-loading">Could not load profile</div>';
@@ -75,6 +71,7 @@ async function loadGitHubProfile() {
       section.innerHTML = '<div class="profile-loading">Could not load profile</div>';
       return;
     }
+    githubProfileData = data;
     const repoCards = (data.repos || []).map(r => {
       const desc = r.description || "";
       const lang = r.language ? '<span class="repo-lang"><span class="lang-dot"></span>' + escapeHtml(r.language) + "</span>" : "";
@@ -86,24 +83,40 @@ async function loadGitHubProfile() {
         "</div></a>";
     }).join("");
 
-    section.innerHTML =
-      '<div class="profile-row">' +
-      '<img class="profile-avatar" src="' + escapeHtml(data.avatar_url) + '" alt="avatar" />' +
-      '<div class="profile-info">' +
-      '<div class="profile-name">' + escapeHtml(data.name || data.login) + "</div>" +
-      (data.bio ? '<div class="profile-bio">' + escapeHtml(data.bio) + "</div>" : "") +
-      (data.location ? '<div class="profile-location">\uD83D\uDCCD ' + escapeHtml(data.location) + "</div>" : "") +
-      "</div>" +
-      "</div>" +
-      '<div class="stats-row">' +
-      '<div class="stats-item"><span class="stats-num">' + data.public_repos + '</span><span class="stats-label">Repos</span></div>' +
-      '<div class="stats-item"><span class="stats-num">' + data.followers + '</span><span class="stats-label">Followers</span></div>' +
-      '<div class="stats-item"><span class="stats-num">' + data.following + '</span><span class="stats-label">Following</span></div>' +
-      "</div>" +
-      '<div class="repo-grid">' + repoCards + "</div>";
+    renderGitHubProfile(data);
   } catch (e) {
     section.innerHTML = '<div class="profile-loading">Could not load profile</div>';
   }
+}
+
+function renderGitHubProfile(data) {
+  const section = document.getElementById("profile-section");
+  if (!section) return;
+  const repoCards = (data.repos || []).map(r => {
+    const desc = r.description || "";
+    const lang = r.language ? '<span class="repo-lang"><span class="lang-dot"></span>' + escapeHtml(r.language) + "</span>" : "";
+    return '<a href="' + escapeHtml(r.url) + '" target="_blank" class="repo-card">' +
+      '<div class="repo-name">' + escapeHtml(r.name) + "</div>" +
+      (desc ? '<div class="repo-desc">' + escapeHtml(desc) + "</div>" : "") +
+      '<div class="repo-meta">' + lang +
+      '<span>\u2B50 ' + r.stars + "</span>" +
+      "</div></a>";
+  }).join("");
+  section.innerHTML =
+    '<div class="profile-row">' +
+    '<img class="profile-avatar" src="' + escapeHtml(data.avatar_url) + '" alt="avatar" />' +
+    '<div class="profile-info">' +
+    '<div class="profile-name">' + escapeHtml(data.name || data.login) + "</div>" +
+    (data.bio ? '<div class="profile-bio">' + escapeHtml(data.bio) + "</div>" : "") +
+    (data.location ? '<div class="profile-location">\uD83D\uDCCD ' + escapeHtml(data.location) + "</div>" : "") +
+    "</div>" +
+    "</div>" +
+    '<div class="stats-row">' +
+    '<div class="stats-item"><span class="stats-num">' + data.public_repos + '</span><span class="stats-label">Repos</span></div>' +
+    '<div class="stats-item"><span class="stats-num">' + data.followers + '</span><span class="stats-label">Followers</span></div>' +
+    '<div class="stats-item"><span class="stats-num">' + data.following + '</span><span class="stats-label">Following</span></div>' +
+    "</div>" +
+    '<div class="repo-grid">' + repoCards + "</div>";
 }
 
 async function loadHealthData() {
@@ -138,7 +151,7 @@ function animateCounter(element, target, duration) {
   requestAnimationFrame(update);
 }
 
-let pollChart = null;
+
 
 async function loadPollData() {
   try {
@@ -206,7 +219,8 @@ function createPollCard(poll) {
       "</div></div></div>";
   }).join("");
   const ts = poll.timestamp ? new Date(poll.timestamp).toLocaleString() : "N/A";
-  card.innerHTML = '<h3 class="card-title">' + escapeHtml(poll.question) + "</h3>" +
+  const activeBadge = poll.active !== false ? '<span class="poll-badge poll-badge-active">Live</span>' : '<span class="poll-badge poll-badge-ended">Ended</span>';
+  card.innerHTML = '<h3 class="card-title" style="display:flex;align-items:center;gap:8px;">' + activeBadge + escapeHtml(poll.question) + "</h3>" +
     optionsHTML +
     '<div class="poll-stats">' +
     '<span><strong class="total-votes">0</strong> total votes</span>' +
@@ -341,8 +355,8 @@ async function loadBotStatusSection() {
       "</div>" +
       '<div class="status-info">' +
       '<div class="status-row"><span class="status-label">\u23F1\uFE0F Uptime:</span><span class="status-value">' + (status.uptime || "N/A") + "</span></div>" +
-      '<div class="status-row"><span class="status-label">\uD83C\uDFAF Total Votes:</span><span class="status-value"><span class="votes-total">0</span></span></div>" +
-      '<div class="status-row"><span class="status-label">\uD83D\uDCCA Today\'s Votes:</span><span class="status-value"><span class="votes-today">0</span></span></div>" +
+      '<div class="status-row"><span class="status-label">\uD83C\uDFAF Total Votes:</span><span class="status-value"><span class="votes-total">0</span></span></div>' +
+      '<div class="status-row"><span class="status-label">\uD83D\uDCCA Today\'s Votes:</span><span class="status-value"><span class="votes-today">0</span></span></div>' +
       '<div class="status-row"><span class="status-label">\uD83D\uDDA5\uFE0F Latency:</span><span class="status-value">' + (status.latency_ms || 0) + "ms</span></div>" +
       "</div></div>";
     requestAnimationFrame(() => {
@@ -356,6 +370,7 @@ async function loadBotStatusSection() {
   }
 }
 
+let githubProfileData = null;
 let pollChartInstance = null;
 
 async function openPollModal(pollId) {
@@ -372,9 +387,34 @@ async function openPollModal(pollId) {
     title.textContent = data.question || "Poll";
     modal.setAttribute("aria-hidden", "false");
     modal.classList.add("open");
+    const endBtn = document.getElementById("end-poll-btn");
+    if (endBtn) {
+      endBtn.style.display = data.active !== false ? "block" : "none";
+      endBtn.onclick = async function() {
+        if (!confirm('End this poll? Votes will be frozen and buttons disabled on Discord.')) return;
+        try {
+          const r = await fetch("/api/polls/" + pollId + "/end", { method: "POST" });
+          const j = await r.json();
+          if (r.ok) {
+            alert("Poll ended successfully.");
+            endBtn.style.display = "none";
+            closePollModal();
+            loadPollData();
+          } else {
+            alert("Error: " + (j.error || "Unknown"));
+          }
+        } catch (e) {
+          alert("Network error ending poll.");
+        }
+      };
+    }
     const ctx = document.getElementById("poll-chart-canvas");
     if (!ctx) return;
     const canvas = ctx.getContext("2d");
+    if (typeof Chart === "undefined") {
+      console.warn("Chart.js not loaded");
+      return;
+    }
     const labels = (data.options || []).map(o => o.name || "");
     const chartData = (data.options || []).map(o => o.votes || 0);
     const colors = ["#6366F1", "#8B5CF6", "#EC4899", "#F59E0B", "#22C55E"];
@@ -410,7 +450,6 @@ async function openPollModal(pollId) {
       preview.innerHTML = "<strong>" + escapeHtml(data.question) + '</strong><div style="margin-top:6px;color:var(--color-text-muted);font-size:0.8125rem;">Click chart for full view</div>';
     }
     renderVoterMatrix(data.voters_by_choice || {});
-    renderVoterBreakdown(data.voters_by_choice || {});
     const refreshBtn = document.getElementById("refresh-poll-data");
     if (refreshBtn) {
       refreshBtn.onclick = function() { openPollModal(pollId); };
@@ -439,36 +478,7 @@ function renderVoterMatrix(votersByChoice) {
   container.innerHTML = rows;
 }
 
-function renderVoterBreakdown(votersByChoice) {
-  const container = document.getElementById("voter-breakdown-content");
-  if (!container) return;
-  var entries = Object.keys(votersByChoice);
-  if (entries.length === 0) {
-    container.innerHTML = '<p style="color:var(--color-text-muted);font-size:0.8125rem;">No voter data available yet.</p>';
-    return;
-  }
-  container.innerHTML = "";
-  entries.forEach(function(choice, idx) {
-    var voters = votersByChoice[choice];
-    var section = document.createElement("div");
-    section.className = "voter-section";
-    section.style.animationDelay = idx * 80 + "ms";
-    var voterList = "";
-    if (voters && voters.length > 0) {
-      voterList = voters.map(function(v) {
-        return '<span class="voter-tag">' + escapeHtml(v) + "</span>";
-      }).join("");
-    } else {
-      voterList = '<span style="color:var(--color-text-muted);font-size:0.75rem;">No voters yet</span>';
-    }
-    section.innerHTML = '<div class="voter-section-header">' +
-      '<span class="voter-section-name">' + escapeHtml(choice) + "</span>" +
-      '<span class="voter-section-count">' + voters.length + " voter" + (voters.length !== 1 ? "s" : "") + "</span>" +
-      "</div>" +
-      '<div class="voter-tags">' + voterList + "</div>";
-    container.appendChild(section);
-  });
-}
+
 
 function closePollModal() {
   const modal = document.getElementById("poll-modal");
@@ -533,13 +543,26 @@ function updatePollOptionCount() {
   if (btn) btn.disabled = count >= 5;
 }
 
-function exportCSV() {
-  var a = document.createElement("a");
-  a.href = "/api/export/csv";
-  a.download = "poll_feedback.csv";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+async function exportCSV() {
+  try {
+    const resp = await fetch("/api/export/csv");
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      alert("\u274C Export failed: " + (err.error || "Unknown error"));
+      return;
+    }
+    const blob = await resp.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "poll_feedback.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  } catch (err) {
+    console.error(err);
+    alert("\u274C Export failed: Network error");
+  }
 }
 
 function startAutoRefresh() {
@@ -588,6 +611,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const addBtn = document.getElementById("add-poll-option-btn");
   if (addBtn) addBtn.addEventListener("click", function (e) { e.preventDefault(); addPollOption(); });
+
+  const refreshBtn = document.getElementById("refresh-polls");
+  if (refreshBtn) refreshBtn.addEventListener("click", function () { loadPollData(); });
 
   if (!document.querySelector(".poll-option-input")) {
     addPollOption(""); addPollOption("");

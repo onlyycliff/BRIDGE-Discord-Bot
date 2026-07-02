@@ -34,10 +34,12 @@ class PollState:
     def __init__(self):
         self.polls: Dict[int, 'PollView'] = {}
         self.user_votes: Dict[int, Set[int]] = {}
+        self.active: Dict[int, bool] = {}
 
     def add_poll(self, poll_id: int, poll_view: 'PollView') -> None:
         self.polls[poll_id] = poll_view
         self.user_votes[poll_id] = set()
+        self.active[poll_id] = True
         logger.info(f"Poll {poll_id} registered")
 
     def has_voted(self, poll_id: int, user_id: int) -> bool:
@@ -48,6 +50,16 @@ class PollState:
             return False
         self.user_votes[poll_id].add(user_id)
         return True
+
+    def end_poll(self, poll_id: int) -> bool:
+        if poll_id in self.active:
+            self.active[poll_id] = False
+            logger.info(f"Poll {poll_id} ended")
+            return True
+        return False
+
+    def is_active(self, poll_id: int) -> bool:
+        return self.active.get(poll_id, True)
 
     def get_poll_data(self, poll_id: int) -> Optional[Dict]:
         poll = self.polls.get(poll_id)
@@ -107,6 +119,13 @@ class PollView(View):
         try:
             user_id = interaction.user.id
             user_name = interaction.user.display_name
+
+            if not poll_state.is_active(self.poll_id):
+                await interaction.response.send_message(
+                    "This poll has ended. Voting is no longer available.",
+                    ephemeral=True
+                )
+                return
 
             if not poll_state.record_vote(self.poll_id, user_id):
                 await interaction.response.send_message(

@@ -5,6 +5,7 @@ from datetime import datetime
 import threading
 import logging
 import shutil
+import atexit
 from typing import Optional, List, Dict
 
 logging.basicConfig(level=logging.INFO)
@@ -27,6 +28,7 @@ class ExcelDataManager:
         self._initialize_excel()
         self._load_cache()
         self._start_flush_loop()
+        atexit.register(self._final_flush)
 
     def _initialize_excel(self) -> None:
         try:
@@ -63,16 +65,16 @@ class ExcelDataManager:
                     logger.error(f"Error flushing cache: {e}")
         self._start_flush_loop()
 
-    def __del__(self):
+    def _final_flush(self):
         if self._flush_timer:
             self._flush_timer.cancel()
         if self._dirty and self._cache is not None:
             try:
                 with pd.ExcelWriter(self.file_path, engine='openpyxl', mode='w') as writer:
                     self._cache.to_excel(writer, sheet_name=self.main_sheet, index=False)
-                logger.info("Final cache flush on shutdown")
-            except Exception as e:
-                logger.error(f"Error on final flush: {e}")
+                print("Final cache flush on shutdown")
+            except Exception:
+                pass
 
     def _maybe_backup(self) -> None:
         self._vote_count += 1

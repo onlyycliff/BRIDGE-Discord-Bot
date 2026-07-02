@@ -13,9 +13,13 @@
 
     <!-- HUB / LANDING PAGE -->
     <div id="hub" class="page active">
-      <div class="theme-toggle-corner" onclick="toggleTheme()">
-        <span id="theme-icon">&#9790;</span>
-      </div>
+  <div class="theme-toggle-corner">
+    <div id="bot-status-indicator" style="display:flex;align-items:center;gap:6px;font-size:0.7rem;">
+      <div class="status-dot online" style="width:8px;height:8px;margin:0;"></div>
+      <span class="status-text" style="color:var(--color-text-muted);font-weight:500;">Online</span>
+    </div>
+    <span id="theme-icon" onclick="toggleTheme()" style="cursor:pointer;">☀️</span>
+  </div>
 
       <!-- Profile Section -->
       <div id="profile-section" class="profile-section">
@@ -173,9 +177,11 @@
       <div id="voter-breakdown" class="voter-breakdown">
         <h4 class="voter-breakdown-title">Voter Matrix</h4>
         <div id="voter-matrix-table"></div>
-        <div id="voter-breakdown-content"></div>
       </div>
-      <button class="btn btn-secondary" id="refresh-poll-data" style="margin-top:12px;width:100%;font-size:0.8125rem;">Refresh Poll Data</button>
+      <div class="modal-actions" style="display:flex;gap:8px;margin-top:12px;">
+      <button class="btn btn-secondary" id="refresh-poll-data" style="flex:1;font-size:0.8125rem;">Refresh Poll Data</button>
+      <button class="btn btn-danger" id="end-poll-btn" style="flex:1;font-size:0.8125rem;display:none;">End Poll</button>
+      </div>
     </div>
   </div>
 

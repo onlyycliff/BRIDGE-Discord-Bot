@@ -1,5 +1,4 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-@import url('https://rsms.me/inter/inter.css');
 
 :root {
   --gradient-primary: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
@@ -117,6 +116,52 @@
   border-color: var(--color-primary);
 }
 
+
+[data-theme="light"] .pagination button {
+  background: #FFFFFF;
+  border-color: #CBD5E1;
+  color: #1E293B;
+}
+
+[data-theme="light"] .pagination button.active {
+  background: var(--gradient-primary);
+  color: white;
+  border-color: var(--color-primary);
+}
+
+[data-theme="light"] .pagination button:hover:not(:disabled) {
+  background: #F1F5F9;
+}
+
+[data-theme="light"] .matrix-table th {
+  background: #F1F5F9;
+}
+
+[data-theme="light"] .matrix-voter {
+  background: #F1F5F9;
+  border-color: #E2E8F0;
+}
+
+[data-theme="light"] .matrix-table td {
+  border-bottom-color: #E2E8F0;
+}
+
+[data-theme="light"] .poll-bar-fill {
+  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.2);
+}
+
+[data-theme="light"] table {
+  background: #FFFFFF;
+}
+
+[data-theme="light"] thead {
+  background: #F1F5F9;
+}
+
+[data-theme="light"] #bot-status-indicator .status-text {
+  color: #64748B !important;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -202,14 +247,14 @@ h1, h2, h3, h4, h5, h6 {
   top: 16px;
   right: 16px;
   z-index: 100;
-  width: 36px;
   height: 36px;
-  border-radius: 50%;
+  border-radius: 18px;
+  padding: 0 12px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 8px;
   cursor: pointer;
   transition: all 0.2s;
   font-size: 1rem;
@@ -725,6 +770,18 @@ h1, h2, h3, h4, h5, h6 {
   transform: translateY(-2px);
 }
 
+.btn-danger {
+  background: var(--color-offline);
+  color: white;
+  border: 1px solid transparent;
+}
+
+.btn-danger:hover {
+  background: #DC2626;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
+}
+
 /* ─── Table ───────────────────────────────────────── */
 .table-wrapper {
   overflow-x: auto;
@@ -916,6 +973,42 @@ tbody tr:hover {
   border: 1px solid var(--color-border);
 }
 
+/* ─── Poll Badge (Active/Ended) ──────────────────── */
+.poll-badge {
+  display: inline-block;
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  line-height: 1.4;
+}
+
+.poll-badge-active {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--color-online);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.poll-badge-ended {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--color-offline);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.poll-badge-active::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-online);
+  margin-right: 4px;
+  animation: pulse 1.5s infinite;
+  vertical-align: middle;
+}
+
 /* ─── Voter Matrix Table ──────────────────────────── */
 .matrix-table {
   width: 100%;
@@ -954,9 +1047,30 @@ tbody tr:hover {
 }
 
 /* ─── Responsive ──────────────────────────────────── */
-@media (max-width: 768px) {
-  .panel-grid { grid-template-columns: 1fr; }
-  .section-title { font-size: 1.25rem; }
-  .stat-bar { grid-template-columns: 1fr 1fr; }
-  .profile-section { padding: 16px; }
+
+@media (max-width: 600px) {
+  .modal-content {
+    padding: 16px;
+    width: 98%;
+  }
+  #poll-chart-canvas {
+    height: 180px !important;
+  }
+  .hub-grid {
+    grid-template-columns: 1fr;
+  }
+  .page {
+    padding: 14px;
+  }
+  .repo-grid {
+    grid-template-columns: 1fr;
+  }
+  .profile-row {
+    flex-direction: column;
+    text-align: center;
+  }
+  .stat-bar {
+    grid-template-columns: 1fr;
+  }
 }
+
