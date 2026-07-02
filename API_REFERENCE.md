@@ -52,9 +52,9 @@ Headers: Timestamp, Username, Question, Choice
 
 ---
 
-## Excel Manager Endpoints
+## Poll Data Endpoints
 
-#### GET `/api/excel/stats`
+#### GET `/api/data/status`
 Get current statistics from Excel data
 ```
 Response: {
@@ -66,7 +66,7 @@ Response: {
 }
 ```
 
-#### GET `/api/excel/summary`
+#### GET `/api/summary`
 Get vote summary grouped by question
 ```
 Response: [
@@ -78,10 +78,10 @@ Response: [
 ]
 ```
 
-#### GET `/api/excel/poll/<poll_id>`
+#### GET `/api/polls/<poll_id>`
 Get detailed statistics for a specific poll
 ```
-Example: /api/excel/poll/1234567890
+Example: /api/polls/1234567890
 Response: {
   "total_votes": 42,
   "question": "What's your favorite feature?",
@@ -90,7 +90,7 @@ Response: {
 }
 ```
 
-#### GET `/api/excel/export-csv`
+#### GET `/api/export/csv`
 Export all Excel data as CSV
 ```
 Response: CSV file download
@@ -174,7 +174,7 @@ const response = await fetch('/submit', {
 
 // Download CSV
 document.getElementById('export-btn').onclick = () => {
-  window.location.href = '/api/excel/export-csv';
+  window.location.href = '/api/export/csv';
 };
 ```
 
@@ -183,11 +183,11 @@ document.getElementById('export-btn').onclick = () => {
 import requests
 
 # Get stats
-stats = requests.get('http://localhost:5000/api/excel/stats').json()
+stats = requests.get('http://localhost:5000/api/data/status').json()
 print(f"Total votes: {stats['total_votes']}")
 
 # Get poll details
-poll = requests.get('http://localhost:5000/api/excel/poll/1234567890').json()
+poll = requests.get('http://localhost:5000/api/polls/1234567890').json()
 print(f"Poll: {poll['question']}")
 print(f"Results: {poll['choices']}")
 ```
@@ -195,13 +195,13 @@ print(f"Results: {poll['choices']}")
 ### cURL
 ```bash
 # Get statistics
-curl http://localhost:5000/api/excel/stats
+curl http://localhost:5000/api/data/status
 
 # Get summary
-curl http://localhost:5000/api/excel/summary
+curl http://localhost:5000/api/summary
 
 # Export CSV
-curl http://localhost:5000/api/excel/export-csv > feedback.csv
+curl http://localhost:5000/api/export/csv > feedback.csv
 ```
 
 ---
@@ -239,3 +239,4 @@ Optional API key authentication will be added for Colab integration.
 
 **Last Updated**: 2024
 **Version**: 2.0 (Excel Manager)
+
