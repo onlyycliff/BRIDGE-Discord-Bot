@@ -63,7 +63,7 @@ class ExcelDataManager:
         with self.lock:
             try:
                 new_vote = pd.DataFrame([{
-                    "Timestamp": datetime.now(),
+                    "Timestamp": str(datetime.now()),
                     "Username": username,
                     "User_ID": int(user_id),
                     "Question": question,

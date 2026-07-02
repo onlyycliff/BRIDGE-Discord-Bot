@@ -61,19 +61,30 @@ def create_poll():
         if len(options) < 2:
             return jsonify({"error": "Need at least 2 unique options"}), 400
         
-        # Send poll to Discord (schedule async task)
+        # Send poll to Discord - use thread-safe approach
         try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            success = loop.run_until_complete(send_poll(question, options))
-        except RuntimeError:
-            # If event loop already exists, use it
-            success = asyncio.run(send_poll(question, options))
+            from .bot import bot
+            
+            # Get or create event loop
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            # Schedule coroutine
+            task = asyncio.run_coroutine_threadsafe(send_poll(question, options), loop)
+            success = task.result(timeout=10)
+            
+        except Exception as inner_e:
+            logger.error(f"Error scheduling poll: {inner_e}")
+            return jsonify({"error": f"Failed to send poll: {str(inner_e)}"}), 500
         
         if not success:
-            return jsonify({"error": "Failed to send poll to Discord"}), 500
+            logger.warning(f"Poll creation returned False for: {question}")
+            return jsonify({"error": "Failed to send poll to Discord - check logs"}), 500
         
-        logger.info(f"Poll created: {question}")
+        logger.info(f"Poll created successfully: {question} with {len(options)} options")
         return jsonify({
             "success": True,
             "message": "Poll sent successfully",
@@ -82,7 +93,7 @@ def create_poll():
         }), 201
         
     except Exception as e:
-        logger.error(f"Error creating poll: {e}")
+        logger.error(f"Error creating poll: {e}", exc_info=True)
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 
