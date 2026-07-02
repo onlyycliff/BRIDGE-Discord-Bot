@@ -1,0 +1,223 @@
+# Backend API for Bridge Dashboard
+import logging
+import asyncio
+from typing import List, Dict, Tuple
+from datetime import datetime
+from flask import Blueprint, jsonify, request
+from .excel_manager import excel_manager
+from .bot import poll_state, send_poll
+
+logger = logging.getLogger(__name__)
+
+# Create API blueprint for separation of concerns
+api = Blueprint('api', __name__, url_prefix='/api')
+
+@api.route('/health', methods=['GET'])
+def health_check():
+    """Health check endpoint - verify API and bot are responsive"""
+    try:
+        return jsonify({
+            "status": "healthy",
+            "timestamp": datetime.now().isoformat()
+        }), 200
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@api.route('/polls/create', methods=['POST'])
+async def create_poll():
+    """Create a new poll with multiple options
+    
+    Expected JSON:
+    {
+        "question": "Your question here",
+        "options": ["Option 1", "Option 2", "Option 3"]
+    }
+    """
+    try:
+        data = request.get_json()
+        
+        # Validate input
+        if not data:
+            return jsonify({"error": "No JSON data provided"}), 400
+        
+        question = data.get('question', '').strip()
+        options = data.get('options', [])
+        
+        if not question:
+            return jsonify({"error": "Question is required"}), 400
+        
+        if not isinstance(options, list) or len(options) < 2:
+            return jsonify({"error": "At least 2 options are required"}), 400
+        
+        if len(options) > 5:
+            return jsonify({"error": "Maximum 5 options allowed"}), 400
+        
+        # Remove duplicates and empty options
+        options = [opt.strip() for opt in options if opt.strip()]
+        options = list(dict.fromkeys(options))  # Remove duplicates while preserving order
+        
+        if len(options) < 2:
+            return jsonify({"error": "Need at least 2 unique options"}), 400
+        
+        # Send poll to Discord
+        success = await send_poll(question, options)
+        
+        if not success:
+            return jsonify({"error": "Failed to send poll to Discord"}), 500
+        
+        logger.info(f"Poll created: {question}")
+        return jsonify({
+            "success": True,
+            "message": "Poll sent successfully",
+            "question": question,
+            "options": options
+        }), 201
+        
+    except Exception as e:
+        logger.error(f"Error creating poll: {e}")
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
+
+
+@api.route('/polls/stats', methods=['GET'])
+def get_poll_stats():
+    """Get statistics for a specific poll
+    
+    Query params:
+        poll_id: ID of the poll
+    """
+    try:
+        poll_id = request.args.get('poll_id', type=int)
+        
+        if not poll_id:
+            return jsonify({"error": "poll_id parameter required"}), 400
+        
+        stats = excel_manager.get_poll_stats(poll_id)
+        
+        if not stats:
+            return jsonify({"error": f"Poll {poll_id} not found"}), 404
+        
+        return jsonify(stats), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting poll stats: {e}")
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
+
+
+@api.route('/votes/all', methods=['GET'])
+def get_all_votes():
+    """Get all votes from the system
+    
+    Optional query params:
+        limit: Max number of records (default: all)
+        question: Filter by question
+        username: Filter by username
+    """
+    try:
+        votes = excel_manager.get_all_votes()
+        
+        # Apply filters if provided
+        question_filter = request.args.get('question')
+        username_filter = request.args.get('username')
+        limit = request.args.get('limit', type=int)
+        
+        if question_filter:
+            votes = [v for v in votes if question_filter.lower() in str(v.get('Question', '')).lower()]
+        
+        if username_filter:
+            votes = [v for v in votes if username_filter.lower() in str(v.get('Username', '')).lower()]
+        
+        if limit:
+            votes = votes[-limit:]  # Get last N votes
+        
+        return jsonify({
+            "total": len(votes),
+            "votes": votes
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error retrieving votes: {e}")
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
+
+
+@api.route('/votes/by-user/<int:user_id>', methods=['GET'])
+def get_user_votes(user_id: int):
+    """Get all votes by a specific user"""
+    try:
+        votes = excel_manager.get_all_votes()
+        user_votes = [v for v in votes if v.get('User_ID') == user_id]
+        
+        return jsonify({
+            "user_id": user_id,
+            "vote_count": len(user_votes),
+            "votes": user_votes
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error retrieving user votes: {e}")
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
+
+
+@api.route('/summary', methods=['GET'])
+def get_summary():
+    """Get summary statistics grouped by question"""
+    try:
+        summary = excel_manager.get_summary_by_question()
+        
+        if not summary:
+            return jsonify({"summary": {}, "total_questions": 0}), 200
+        
+        return jsonify({
+            "summary": summary,
+            "total_questions": len(summary)
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting summary: {e}")
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
+
+
+@api.route('/export/csv', methods=['GET'])
+def export_csv():
+    """Export all poll data to CSV"""
+    try:
+        filepath = excel_manager.export_to_csv()
+        
+        if not filepath:
+            return jsonify({"error": "No data to export"}), 404
+        
+        return jsonify({
+            "success": True,
+            "message": "Data exported to CSV",
+            "file": filepath
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error exporting CSV: {e}")
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
+
+
+@api.route('/dashboard/overview', methods=['GET'])
+def get_dashboard_overview():
+    """Get overview stats for dashboard"""
+    try:
+        all_votes = excel_manager.get_all_votes()
+        summary = excel_manager.get_summary_by_question()
+        
+        # Calculate metrics
+        total_votes = len(all_votes)
+        unique_voters = len(set(v.get('User_ID') for v in all_votes))
+        active_polls = len(summary) if summary else 0
+        
+        return jsonify({
+            "total_votes": total_votes,
+            "unique_voters": unique_voters,
+            "active_polls": active_polls,
+            "engagement_rate": f"{(unique_voters / total_votes * 100):.1f}%" if total_votes > 0 else "0%",
+            "last_updated": datetime.now().isoformat()
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting dashboard overview: {e}")
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
