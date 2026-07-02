@@ -10,7 +10,8 @@
           ]
         }
       }
-    }
+    },
+    "command": "pip install -r requirements.txt && pip install -e ."
   },
   "deploy": {
     "numReplicas": 1,
