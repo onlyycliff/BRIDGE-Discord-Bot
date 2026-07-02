@@ -65,19 +65,36 @@ def create_poll():
         try:
             from .bot import bot
             
-            # Get or create event loop
-            try:
-                loop = asyncio.get_event_loop()
-            except RuntimeError:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
+            # Check if bot is connected
+            if not bot or not bot.is_ready():
+                logger.warning("Bot not ready for poll creation")
+                return jsonify({"error": "Bot not connected to Discord"}), 503
             
-            # Schedule coroutine
+            # Get the running event loop from the bot
+            loop = None
+            try:
+                # Try to get the bot's event loop
+                loop = bot.loop
+            except (AttributeError, RuntimeError):
+                logger.warning("Could not get bot event loop, attempting fallback")
+            
+            # If no loop available, we have a connection issue
+            if not loop or loop.is_closed():
+                logger.error("Event loop not available or closed")
+                return jsonify({"error": "Bot event loop unavailable"}), 503
+            
+            # Schedule coroutine safely
+            logger.info(f"Scheduling poll: {question} with options: {options}")
             task = asyncio.run_coroutine_threadsafe(send_poll(question, options), loop)
+            
+            # Wait for result with timeout
             success = task.result(timeout=10)
             
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout scheduling poll: {question}")
+            return jsonify({"error": "Poll creation timed out"}), 504
         except Exception as inner_e:
-            logger.error(f"Error scheduling poll: {inner_e}")
+            logger.error(f"Error scheduling poll: {inner_e}", exc_info=True)
             return jsonify({"error": f"Failed to send poll: {str(inner_e)}"}), 500
         
         if not success:
@@ -222,19 +239,26 @@ def get_dashboard_overview():
         all_votes = excel_manager.get_all_votes()
         summary = excel_manager.get_summary_by_question()
         
-        # Calculate metrics
-        total_votes = len(all_votes)
-        unique_voters = len(set(v.get('User_ID') for v in all_votes))
+        # Calculate metrics with safe conversions
+        total_votes = len(all_votes) if all_votes else 0
+        unique_voters = len(set(v.get('User_ID') for v in all_votes if v.get('User_ID'))) if all_votes else 0
         active_polls = len(summary) if summary else 0
+        
+        engagement_rate = "0%"
+        if total_votes > 0 and unique_voters > 0:
+            try:
+                engagement_rate = f"{(unique_voters / total_votes * 100):.1f}%"
+            except (TypeError, ZeroDivisionError):
+                engagement_rate = "N/A"
         
         return jsonify({
             "total_votes": total_votes,
             "unique_voters": unique_voters,
             "active_polls": active_polls,
-            "engagement_rate": f"{(unique_voters / total_votes * 100):.1f}%" if total_votes > 0 else "0%",
+            "engagement_rate": engagement_rate,
             "last_updated": datetime.now().isoformat()
         }), 200
         
     except Exception as e:
-        logger.error(f"Error getting dashboard overview: {e}")
+        logger.error(f"Error getting dashboard overview: {e}", exc_info=True)
         return jsonify({"error": f"Server error: {str(e)}"}), 500

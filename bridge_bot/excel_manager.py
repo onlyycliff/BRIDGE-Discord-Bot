@@ -101,16 +101,25 @@ class ExcelDataManager:
                 if poll_data.empty:
                     return None
                 
+                # Build stats with proper type conversions
+                choices = {}
+                if 'Choice' in poll_data.columns:
+                    choices = poll_data['Choice'].value_counts().to_dict()
+                
+                voters = []
+                if 'Username' in poll_data.columns:
+                    voters = poll_data['Username'].unique().tolist()
+                
                 stats = {
                     "total_votes": len(poll_data),
                     "question": poll_data.iloc[0]['Question'] if 'Question' in poll_data.columns else "Unknown",
-                    "choices": poll_data['Choice'].value_counts().to_dict() if 'Choice' in poll_data.columns else {},
-                    "voters": poll_data['Username'].unique().tolist() if 'Username' in poll_data.columns else []
+                    "choices": choices,
+                    "voters": voters
                 }
                 logger.info(f"Retrieved stats for poll {poll_id}: {stats['total_votes']} votes")
                 return stats
             except Exception as e:
-                logger.error(f"Error getting poll stats: {e}")
+                logger.error(f"Error getting poll stats: {e}", exc_info=True)
                 return None
     
     def get_all_votes(self) -> List[Dict]:
@@ -120,9 +129,18 @@ class ExcelDataManager:
                 df = self._read_all_data()
                 if df.empty:
                     return []
-                return df.to_dict('records')
+                
+                # Convert to dict and ensure all timestamps are strings
+                records = []
+                for _, row in df.iterrows():
+                    record = row.to_dict()
+                    # Convert pandas Timestamp to string for JSON serialization
+                    if 'Timestamp' in record and pd.notna(record['Timestamp']):
+                        record['Timestamp'] = str(record['Timestamp'])
+                    records.append(record)
+                return records
             except Exception as e:
-                logger.error(f"Error reading votes: {e}")
+                logger.error(f"Error reading votes: {e}", exc_info=True)
                 return []
     
     def _read_all_data(self) -> pd.DataFrame:
@@ -200,16 +218,25 @@ class ExcelDataManager:
                 if df.empty:
                     return {}
                 
-                # Build summary
-                summary = df.groupby('Question').agg({
-                    'Username': 'count' if 'Username' in df.columns else lambda x: len(x),
-                    'Choice': lambda x: x.value_counts().to_dict() if 'Choice' in df.columns else {}
-                }).rename(columns={'Username': 'Total_Votes'})
+                # Build summary with proper type conversions
+                summary = {}
+                for question, group in df.groupby('Question'):
+                    if pd.isna(question) or not str(question).strip():
+                        continue
+                    
+                    choice_counts = {}
+                    if 'Choice' in group.columns:
+                        choice_counts = group['Choice'].value_counts().to_dict()
+                    
+                    summary[str(question)] = {
+                        'Total_Votes': len(group),
+                        'Choices': choice_counts
+                    }
                 
                 logger.info(f"Generated summary with {len(summary)} questions")
-                return summary.to_dict('index')
+                return summary
             except Exception as e:
-                logger.error(f"Error generating summary: {e}")
+                logger.error(f"Error generating summary: {e}", exc_info=True)
                 return {}
 
 # Initialize global manager instance
