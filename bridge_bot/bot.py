@@ -9,7 +9,7 @@ from discord.ext import commands
 from discord.ui import View
 from dotenv import load_dotenv
 
-from bridge_bot.excel_manager import excel_manager
+from .excel_manager import excel_manager
 
 logging.basicConfig(
     level=logging.INFO,
@@ -249,8 +249,11 @@ async def send_poll(
 
         channel = bot.get_channel(target_channel_id)
         if not channel:
-            logger.error(f"Poll channel not found: {target_channel_id}")
-            return False
+            try:
+                channel = await bot.fetch_channel(target_channel_id)
+            except Exception:
+                logger.error(f"Poll channel not found (via fetch): {target_channel_id}")
+                return False
 
         if role_ids:
             mention_str = " ".join(f"<@&{rid}>" for rid in role_ids if rid in available_roles)
