@@ -30,11 +30,11 @@ def health_check():
 def list_channels():
     try:
         from bot import available_channels, bot
-        channels = [{"id": cid, "name": name} for cid, name in available_channels.items()]
+        channels = [{"id": str(cid), "name": name} for cid, name in available_channels.items()]
         if not channels and bot.is_ready():
             for guild in bot.guilds:
                 for ch in guild.text_channels:
-                    channels.append({"id": ch.id, "name": ch.name})
+                    channels.append({"id": str(ch.id), "name": ch.name})
         channels.sort(key=lambda c: c["name"])
         return jsonify(channels), 200
     except Exception as e:
@@ -46,12 +46,12 @@ def list_channels():
 def list_roles():
     try:
         from bot import available_roles, bot
-        roles = [{"id": rid, "name": name} for rid, name in available_roles.items()]
+        roles = [{"id": str(rid), "name": name} for rid, name in available_roles.items()]
         if not roles and bot.is_ready():
             for guild in bot.guilds:
                 for r in guild.roles:
                     if not r.is_default():
-                        roles.append({"id": r.id, "name": r.name})
+                        roles.append({"id": str(r.id), "name": r.name})
         roles.sort(key=lambda r: r["name"])
         return jsonify(roles), 200
     except Exception as e:
@@ -91,8 +91,10 @@ def create_poll():
         if channel_id is not None:
             channel_id = int(channel_id)
 
-        if role_ids is not None and not isinstance(role_ids, list):
-            return jsonify({"error": "role_ids must be a list"}), 400
+        if role_ids is not None:
+            if not isinstance(role_ids, list):
+                return jsonify({"error": "role_ids must be a list"}), 400
+            role_ids = [int(rid) for rid in role_ids]
 
         if max_votes_per_option is not None:
             max_votes_per_option = int(max_votes_per_option)

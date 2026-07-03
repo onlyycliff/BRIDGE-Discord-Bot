@@ -531,7 +531,7 @@ async function submitPollForm(e) {
   const channelId = channelSelect ? channelSelect.value || null : null;
 
   const roleCheckboxes = document.querySelectorAll(".role-checkbox:checked");
-  const roleIds = roleCheckboxes.length > 0 ? Array.from(roleCheckboxes).map(function(cb) { return parseInt(cb.value); }) : null;
+  const roleIds = roleCheckboxes.length > 0 ? Array.from(roleCheckboxes).map(function(cb) { return cb.value; }) : null;
 
   const maxVotesInput = document.getElementById("poll-max-votes");
   const maxVotes = maxVotesInput ? parseInt(maxVotesInput.value) || null : null;
