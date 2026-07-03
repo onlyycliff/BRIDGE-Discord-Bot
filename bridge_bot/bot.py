@@ -6,6 +6,7 @@ from typing import Dict, Set, List, Optional
 
 import discord
 from discord.ext import commands
+from discord.ui import View
 from dotenv import load_dotenv
 
 from bridge_bot.excel_manager import excel_manager

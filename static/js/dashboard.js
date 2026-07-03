@@ -618,7 +618,7 @@ function startAutoRefresh() {
     var active = document.querySelector(".page.active");
     if (!active) return;
     var id = active.id;
-    if (id === "polls") loadPollData();
+    if (id === "polls" || id === "interactive") loadPollData();
     if (id === "vote-log") loadVoteLogData();
     if (id === "bot-status") loadBotStatusSection();
     loadHealthData();
@@ -635,7 +635,7 @@ function updateAllData() {
   loadHealthData();
   var active = document.querySelector(".page.active");
   if (!active) return;
-  if (active.id === "polls") loadPollData();
+  if (active.id === "polls" || active.id === "interactive") loadPollData();
   if (active.id === "vote-log") loadVoteLogData();
   if (active.id === "bot-status") loadBotStatusSection();
 }
