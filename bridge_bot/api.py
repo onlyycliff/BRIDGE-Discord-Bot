@@ -1,15 +1,12 @@
-import sys
-from pathlib import Path
 import os
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
 import logging
 import asyncio
 from pathlib import Path
 from typing import List, Dict, Optional
 from datetime import datetime
-from flask import Blueprint, jsonify, request, send_file
+
 import requests
+from flask import Blueprint, jsonify, request, send_file
 from bridge_bot.excel_manager import excel_manager
 from bridge_bot.bot import send_poll
 

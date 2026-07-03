@@ -3,14 +3,11 @@ Bridge 2026 Flask Dashboard
 Main entry point for the web interface and API
 """
 
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.resolve()))
-
-import logging
-from flask import Flask, render_template
 import os
+import logging
 import threading
+
+from flask import Flask, render_template
 from bridge_bot.bot import start_bot, bot
 from bridge_bot.api import api
 

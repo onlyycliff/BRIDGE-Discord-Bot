@@ -1,8 +1,3 @@
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-# Excel Data Manager - Thread-safe Excel operations for Bridge 2026 feedback
 import pandas as pd
 from pathlib import Path
 from datetime import datetime
@@ -12,7 +7,6 @@ import shutil
 import atexit
 from typing import Optional, List, Dict
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 

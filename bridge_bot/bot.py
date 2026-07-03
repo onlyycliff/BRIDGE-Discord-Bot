@@ -1,16 +1,13 @@
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
 import logging
 import time
-import discord
-from discord.ext import commands
-from discord.ui import Button, View
-from dotenv import load_dotenv
 import os
 from datetime import datetime
 from typing import Dict, Set, List, Optional
+
+import discord
+from discord.ext import commands
+from dotenv import load_dotenv
+
 from bridge_bot.excel_manager import excel_manager
 
 logging.basicConfig(
@@ -28,7 +25,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 start_time = None
 
-CHANNEL_ID = int(os.getenv("POLL_CHANNEL_ID"))
+CHANNEL_ID: Optional[int] = None
 RULES_CHANNEL_NAME = os.getenv("RULES_CHANNEL_NAME", "\U0001f4dc\uff5crules")
 INDIGO = 0x6366F1
 
@@ -218,6 +215,10 @@ class PollView(View):
 
 async def send_poll(question: str, options: List[str]) -> bool:
     try:
+        if CHANNEL_ID is None:
+            logger.error("POLL_CHANNEL_ID not configured")
+            return False
+
         if not question or not options or len(options) < 2:
             logger.error(f"Invalid poll parameters - Question: {question}, Options: {options}")
             return False
@@ -395,6 +396,8 @@ async def on_ready():
 
 
 def start_bot() -> None:
+    global CHANNEL_ID
+
     token = os.getenv("TOKEN")
     if not token:
         logger.error("Discord bot token not found in environment variables")
@@ -405,6 +408,7 @@ def start_bot() -> None:
         logger.error("POLL_CHANNEL_ID not set in environment variables")
         raise ValueError("Missing POLL_CHANNEL_ID environment variable")
 
+    CHANNEL_ID = int(channel_id_str)
     logger.info("Starting Bridge Bot...")
     bot.run(token)
 

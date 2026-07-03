@@ -1,7 +1,28 @@
+# Environment
 .env
 bridge_bot/.env
+
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Data files
 responses.xlsx
 ~$responses.xlsx
 poll_feedback.csv
+*.bak
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
