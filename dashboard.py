@@ -9,12 +9,12 @@ import logging
 import threading
 from pathlib import Path
 
-# Ensure project root is on sys.path (fixes Railway ModuleNotFoundError)
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+# Ensure bridge_bot directory is on sys.path (fixes Railway ModuleNotFoundError)
+sys.path.insert(0, str(Path(__file__).resolve().parent / 'bridge_bot'))
 
 from flask import Flask, render_template, redirect, url_for
-from bridge_bot.bot import start_bot, bot
-from bridge_bot.api import api
+from bot import start_bot, bot
+from api import api
 
 # Setup logging
 logging.basicConfig(

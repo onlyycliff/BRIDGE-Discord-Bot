@@ -7,8 +7,8 @@ from datetime import datetime
 
 import requests
 from flask import Blueprint, jsonify, request, send_file
-from bridge_bot.excel_manager import excel_manager
-from bridge_bot.bot import send_poll
+from excel_manager import excel_manager
+from bot import send_poll
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ def health_check():
 @api.route('/discord/channels', methods=['GET'])
 def list_channels():
     try:
-        from bridge_bot.bot import available_channels, bot
+        from bot import available_channels, bot
         channels = [{"id": cid, "name": name} for cid, name in available_channels.items()]
         if not channels and bot.is_ready():
             for guild in bot.guilds:
@@ -45,7 +45,7 @@ def list_channels():
 @api.route('/discord/roles', methods=['GET'])
 def list_roles():
     try:
-        from bridge_bot.bot import available_roles, bot
+        from bot import available_roles, bot
         roles = [{"id": rid, "name": name} for rid, name in available_roles.items()]
         if not roles and bot.is_ready():
             for guild in bot.guilds:
@@ -100,7 +100,7 @@ def create_poll():
                 return jsonify({"error": "max_votes_per_option must be at least 1"}), 400
 
         try:
-            from bridge_bot.bot import bot
+            from bot import bot
 
             if not bot or not bot.is_ready():
                 logger.warning("Bot not ready for poll creation")
@@ -153,7 +153,7 @@ def list_polls():
     try:
         polls = excel_manager.get_all_polls()
         try:
-            from bridge_bot.bot import poll_state
+            from bot import poll_state
             for p in polls:
                 p['active'] = poll_state.is_active(p.get('poll_id'))
         except Exception:
@@ -251,7 +251,7 @@ def get_votes_paginated():
 @api.route('/bot-status', methods=['GET'])
 def get_bot_status():
     try:
-        from bridge_bot.bot import bot, poll_state, start_time
+        from bot import bot, poll_state, start_time
 
         online = bot is not None and bot.is_ready()
 
