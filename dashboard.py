@@ -4,8 +4,13 @@ Main entry point for the web interface and API
 """
 
 import os
+import sys
 import logging
 import threading
+from pathlib import Path
+
+# Ensure project root is on sys.path (fixes Railway ModuleNotFoundError)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from flask import Flask, render_template, redirect, url_for
 from bridge_bot.bot import start_bot, bot

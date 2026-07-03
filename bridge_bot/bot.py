@@ -9,7 +9,7 @@ from discord.ext import commands
 from discord.ui import View
 from dotenv import load_dotenv
 
-from .excel_manager import excel_manager
+from bridge_bot.excel_manager import excel_manager
 
 logging.basicConfig(
     level=logging.INFO,

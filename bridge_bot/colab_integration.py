@@ -10,7 +10,7 @@ import logging
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, List
-from .excel_manager import excel_manager
+from bridge_bot.excel_manager import excel_manager
 
 try:
     import gspread
