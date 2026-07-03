@@ -647,11 +647,14 @@ function escapeHtml(text) {
   return d.innerHTML;
 }
 
+var BOT_AVATAR_FALLBACK = "https://cdn.discordapp.com/avatars/1514286119892684881/2725db1fcb71ea2eeb98854b06fca50c.png?size=512";
+
 function setAvatarUrl(url) {
+  var src = url || BOT_AVATAR_FALLBACK;
   var introImg = document.getElementById("intro-avatar");
   var loaderImg = document.getElementById("loader-avatar");
-  if (introImg && url) introImg.src = url;
-  if (loaderImg && url) loaderImg.src = url;
+  if (introImg) introImg.src = src;
+  if (loaderImg) loaderImg.src = src;
 }
 
 function dismissIntro() {
