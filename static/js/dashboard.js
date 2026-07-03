@@ -47,7 +47,8 @@ function showSection(sectionId) {
   document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
   const page = document.getElementById(sectionId);
   if (page) page.classList.add("active");
-  if (sectionId === "polls" || sectionId === "interactive") loadPollData();
+  if (sectionId === "polls") loadPollData();
+  if (sectionId === "interactive") { loadPollData(); loadChannels(); loadRoles(); }
   if (sectionId === "vote-log") loadVoteLogData();
   if (sectionId === "bot-status") loadBotStatusSection();
   loadHealthData();
@@ -181,17 +182,6 @@ async function loadPollData() {
     });
     container.innerHTML = "";
     container.appendChild(fragment);
-    const stream = document.getElementById("polls-stream");
-    if (stream) {
-      stream.innerHTML = "";
-      const streamFragment = document.createDocumentFragment();
-      polls.slice(0, 4).forEach((poll, index) => {
-        const mini = createPollCard(poll);
-        mini.style.animationDelay = index * 50 + "ms";
-        streamFragment.appendChild(mini);
-      });
-      stream.appendChild(streamFragment);
-    }
   } catch (error) {
     console.error("Error loading polls:", error);
   }
@@ -370,6 +360,49 @@ async function loadBotStatusSection() {
   }
 }
 
+async function loadChannels() {
+  const select = document.getElementById("poll-channel");
+  if (!select) return;
+  try {
+    const channels = await cachedFetch("/api/discord/channels");
+    if (!Array.isArray(channels)) return;
+    const currentValue = select.value;
+    select.innerHTML = '<option value="">Default Channel</option>';
+    channels.forEach(ch => {
+      const opt = document.createElement("option");
+      opt.value = ch.id;
+      opt.textContent = "#" + ch.name;
+      select.appendChild(opt);
+    });
+    if (currentValue) select.value = currentValue;
+  } catch (e) {
+    console.error("Error loading channels:", e);
+  }
+}
+
+async function loadRoles() {
+  const container = document.getElementById("role-picker");
+  if (!container) return;
+  try {
+    const roles = await cachedFetch("/api/discord/roles");
+    if (!Array.isArray(roles)) return;
+    container.innerHTML = "";
+    roles.forEach(r => {
+      const label = document.createElement("label");
+      label.style.cssText = "display:inline-flex;align-items:center;gap:4px;font-size:0.75rem;cursor:pointer;padding:4px 8px;border-radius:6px;border:1px solid var(--color-border);background:var(--color-surface);";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.className = "role-checkbox";
+      cb.value = r.id;
+      label.appendChild(cb);
+      label.appendChild(document.createTextNode("@" + r.name));
+      container.appendChild(label);
+    });
+  } catch (e) {
+    console.error("Error loading roles:", e);
+  }
+}
+
 let githubProfileData = null;
 let pollChartInstance = null;
 
@@ -493,11 +526,27 @@ async function submitPollForm(e) {
   const options = Array.from(optionInputs).map(function(i) { return i.value.trim(); }).filter(Boolean);
   if (!question) { resp.textContent = "Please enter a question."; return; }
   if (options.length < 2) { resp.textContent = "Please provide at least 2 options."; return; }
+
+  const channelSelect = document.getElementById("poll-channel");
+  const channelId = channelSelect ? channelSelect.value || null : null;
+
+  const roleCheckboxes = document.querySelectorAll(".role-checkbox:checked");
+  const roleIds = roleCheckboxes.length > 0 ? Array.from(roleCheckboxes).map(function(cb) { return parseInt(cb.value); }) : null;
+
+  const maxVotesInput = document.getElementById("poll-max-votes");
+  const maxVotes = maxVotesInput ? parseInt(maxVotesInput.value) || null : null;
+
   try {
     const r = await fetch("/api/polls/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: question, options: options })
+      body: JSON.stringify({
+        question: question,
+        options: options,
+        channel_id: channelId,
+        role_ids: roleIds,
+        max_votes_per_option: maxVotes
+      })
     });
     const json = await r.json();
     if (r.ok) {
@@ -505,6 +554,8 @@ async function submitPollForm(e) {
       q.value = "";
       document.getElementById("poll-options-list").innerHTML = "";
       addPollOption(); addPollOption();
+      document.querySelectorAll(".role-checkbox:checked").forEach(function(cb) { cb.checked = false; });
+      if (maxVotesInput) maxVotesInput.value = "";
       loadPollData();
       setTimeout(function() { resp.textContent = ""; }, 3000);
     } else {
@@ -596,6 +647,13 @@ function escapeHtml(text) {
   return d.innerHTML;
 }
 
+function setAvatarUrl(url) {
+  var introImg = document.getElementById("intro-avatar");
+  var loaderImg = document.getElementById("loader-avatar");
+  if (introImg && url) introImg.src = url;
+  if (loaderImg && url) loaderImg.src = url;
+}
+
 function dismissIntro() {
   var overlay = document.getElementById("intro-overlay");
   if (!overlay) return;
@@ -604,6 +662,9 @@ function dismissIntro() {
   if (loader) loader.classList.add("active");
 
   Promise.all([
+    fetch("/api/bot-status").then(function(r) { return r.json(); }).then(function(s) {
+      if (s.avatar_url) setAvatarUrl(s.avatar_url);
+    }).catch(function(){}),
     loadBotStatus().catch(function(){}),
     loadHealthData().catch(function(){}),
     loadGitHubProfile().catch(function(){})

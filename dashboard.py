@@ -7,7 +7,7 @@ import os
 import logging
 import threading
 
-from flask import Flask, render_template
+from flask import Flask, render_template, redirect, url_for
 from bridge_bot.bot import start_bot, bot
 from bridge_bot.api import api
 
@@ -55,13 +55,9 @@ def home():
         return f"Error loading dashboard: {e}", 500
 
 @dashboard.route('/create-poll')
-def create_poll_page():
-    """Serve poll creation page"""
-    try:
-        return render_template('index.html')
-    except Exception as e:
-        logger.error(f"Error loading poll creation page: {e}")
-        return f"Error loading page: {e}", 500
+def create_poll_redirect():
+    """Permanent redirect to dashboard (Live Control)"""
+    return redirect(url_for('home'), 301)
 
 @dashboard.errorhandler(404)
 def not_found(error):

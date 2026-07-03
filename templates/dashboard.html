@@ -11,7 +11,7 @@
 <!-- INTRO OVERLAY -->
 <div id="intro-overlay" onclick="dismissIntro()">
   <div class="intro-content">
-    <div class="intro-emoji">🌉</div>
+    <img class="intro-avatar" id="intro-avatar" src="" alt="BRIDGE 2026">
     <h1 class="intro-title">Bridge 2026 VII</h1>
     <p class="intro-subtitle">Summer Program</p>
     <p class="intro-hint">Click anywhere to enter</p>
@@ -21,7 +21,7 @@
 <!-- LOADING SCREEN -->
 <div id="loading-screen">
   <div class="loader-content">
-    <div class="loader-emoji">🌉</div>
+    <img class="loader-avatar" id="loader-avatar" src="" alt="BRIDGE 2026">
     <div class="loader-bar-track"><div class="loader-bar-fill"></div></div>
     <p class="loader-text">Loading dashboard...</p>
   </div>
@@ -151,11 +151,21 @@
           <form id="create-poll-form">
             <div style="display:flex;flex-direction:column;gap:10px;">
               <input id="poll-question" class="search-input" placeholder="Poll question" required />
+
+              <select id="poll-channel" class="search-input">
+                <option value="">Default Channel</option>
+              </select>
+
               <div id="poll-options-list" style="display:flex;flex-direction:column;gap:6px;"></div>
               <button type="button" class="btn btn-secondary" id="add-poll-option-btn" style="width:100%;margin-top:6px;">+ Add Option</button>
               <div style="font-size:0.75rem;color:var(--color-text-muted);margin-top:4px;">
                 <span id="poll-option-count">0</span> options (max 5)
               </div>
+
+              <div id="role-picker" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;"></div>
+
+              <input type="number" id="poll-max-votes" class="search-input" placeholder="Max votes per option (leave empty for unlimited)" min="1" style="margin-top:4px;">
+
               <div style="display:flex;gap:10px;margin-top:10px;">
                 <button class="btn btn-primary" type="submit">Create Poll</button>
                 <button class="btn btn-secondary" type="button" id="refresh-polls">Refresh Polls</button>
@@ -165,11 +175,6 @@
           <div id="create-response" style="margin-top:10px;font-size:0.8125rem;color:var(--color-text-muted)"></div>
         </div>
 
-      </div>
-
-      <div style="margin-top:20px;">
-        <h3 style="font-size:1rem;margin-bottom:12px;font-weight:700;">Recent Polls</h3>
-        <div id="polls-stream" class="panel-grid" style="gap:12px;"></div>
       </div>
     </div>
 

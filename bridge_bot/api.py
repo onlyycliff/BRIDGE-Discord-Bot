@@ -26,6 +26,39 @@ def health_check():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+@api.route('/discord/channels', methods=['GET'])
+def list_channels():
+    try:
+        from bridge_bot.bot import available_channels, bot
+        channels = [{"id": cid, "name": name} for cid, name in available_channels.items()]
+        if not channels and bot.is_ready():
+            for guild in bot.guilds:
+                for ch in guild.text_channels:
+                    channels.append({"id": ch.id, "name": ch.name})
+        channels.sort(key=lambda c: c["name"])
+        return jsonify(channels), 200
+    except Exception as e:
+        logger.error(f"Error listing channels: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@api.route('/discord/roles', methods=['GET'])
+def list_roles():
+    try:
+        from bridge_bot.bot import available_roles, bot
+        roles = [{"id": rid, "name": name} for rid, name in available_roles.items()]
+        if not roles and bot.is_ready():
+            for guild in bot.guilds:
+                for r in guild.roles:
+                    if not r.is_default():
+                        roles.append({"id": r.id, "name": r.name})
+        roles.sort(key=lambda r: r["name"])
+        return jsonify(roles), 200
+    except Exception as e:
+        logger.error(f"Error listing roles: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @api.route('/polls/create', methods=['POST'])
 def create_poll():
     try:
@@ -36,6 +69,9 @@ def create_poll():
 
         question = data.get('question', '').strip()
         options = data.get('options', [])
+        channel_id = data.get('channel_id')
+        role_ids = data.get('role_ids')
+        max_votes_per_option = data.get('max_votes_per_option')
 
         if not question:
             return jsonify({"error": "Question is required"}), 400
@@ -51,6 +87,17 @@ def create_poll():
 
         if len(options) < 2:
             return jsonify({"error": "Need at least 2 unique options"}), 400
+
+        if channel_id is not None:
+            channel_id = int(channel_id)
+
+        if role_ids is not None and not isinstance(role_ids, list):
+            return jsonify({"error": "role_ids must be a list"}), 400
+
+        if max_votes_per_option is not None:
+            max_votes_per_option = int(max_votes_per_option)
+            if max_votes_per_option < 1:
+                return jsonify({"error": "max_votes_per_option must be at least 1"}), 400
 
         try:
             from bridge_bot.bot import bot
@@ -70,7 +117,10 @@ def create_poll():
                 return jsonify({"error": "Bot event loop unavailable"}), 503
 
             logger.info(f"Scheduling poll: {question} with options: {options}")
-            task = asyncio.run_coroutine_threadsafe(send_poll(question, options), loop)
+            task = asyncio.run_coroutine_threadsafe(
+                send_poll(question, options, channel_id=channel_id, role_ids=role_ids, max_votes_per_option=max_votes_per_option),
+                loop
+            )
 
             success = task.result(timeout=10)
 
@@ -221,13 +271,16 @@ def get_bot_status():
             if str(v.get("Timestamp", "")).startswith(today)
         )
 
+        avatar_url = str(bot.user.avatar.url) if online and bot.user and bot.user.avatar else ""
+
         return jsonify({
             "online": online,
             "uptime": uptime_str,
             "votes_total": total_votes,
             "votes_today": votes_today,
             "last_command": "N/A",
-            "latency_ms": round(bot.latency * 1000, 1) if online and hasattr(bot, "latency") else 0
+            "latency_ms": round(bot.latency * 1000, 1) if online and hasattr(bot, "latency") else 0,
+            "avatar_url": avatar_url
         }), 200
     except Exception as e:
         logger.error(f"Error getting bot status: {e}", exc_info=True)
@@ -237,7 +290,8 @@ def get_bot_status():
             "votes_total": 0,
             "votes_today": 0,
             "last_command": "N/A",
-            "latency_ms": 0
+            "latency_ms": 0,
+            "avatar_url": ""
         }), 200
 
 

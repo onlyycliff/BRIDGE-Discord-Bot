@@ -29,6 +29,9 @@ CHANNEL_ID: Optional[int] = None
 RULES_CHANNEL_NAME = os.getenv("RULES_CHANNEL_NAME", "\U0001f4dc\uff5crules")
 INDIGO = 0x6366F1
 
+available_channels: Dict[int, str] = {}
+available_roles: Dict[int, str] = {}
+
 
 class PollState:
     """Centralized poll state management"""
@@ -82,11 +85,12 @@ poll_state = PollState()
 class PollView(View):
     """Interactive poll with progress bars and vote tracking"""
 
-    def __init__(self, question: str, options: List[str]):
+    def __init__(self, question: str, options: List[str], max_votes_per_option: Optional[int] = None):
         super().__init__()
         self.question = question
         self.options = options
         self.poll_id = int(time.time() * 1000)
+        self.max_votes_per_option = max_votes_per_option
 
         self.votes = {option: 0 for option in options}
 
@@ -126,6 +130,14 @@ class PollView(View):
                     "This poll has ended. Voting is no longer available.",
                     ephemeral=True
                 )
+                return
+
+            if self.max_votes_per_option is not None and self.votes.get(choice, 0) >= self.max_votes_per_option:
+                await interaction.response.send_message(
+                    f"\u274c The limit of **{self.max_votes_per_option}** votes for **{choice}** has been reached.",
+                    ephemeral=True
+                )
+                logger.warning(f"Vote limit reached - Option {choice} on poll {self.poll_id}")
                 return
 
             if not poll_state.record_vote(self.poll_id, user_id):
@@ -213,10 +225,17 @@ class PollView(View):
             logger.error(f"Error updating embed fields: {e}")
 
 
-async def send_poll(question: str, options: List[str]) -> bool:
+async def send_poll(
+    question: str,
+    options: List[str],
+    channel_id: Optional[int] = None,
+    role_ids: Optional[List[int]] = None,
+    max_votes_per_option: Optional[int] = None,
+) -> bool:
     try:
-        if CHANNEL_ID is None:
-            logger.error("POLL_CHANNEL_ID not configured")
+        target_channel_id = channel_id or CHANNEL_ID
+        if target_channel_id is None:
+            logger.error("POLL_CHANNEL_ID not configured and no channel_id provided")
             return False
 
         if not question or not options or len(options) < 2:
@@ -227,12 +246,17 @@ async def send_poll(question: str, options: List[str]) -> bool:
             logger.warning(f"Poll has {len(options)} options, limiting to 5")
             options = options[:5]
 
-        channel = bot.get_channel(CHANNEL_ID)
+        channel = bot.get_channel(target_channel_id)
         if not channel:
-            logger.error(f"Poll channel not found: {CHANNEL_ID}")
+            logger.error(f"Poll channel not found: {target_channel_id}")
             return False
 
-        view = PollView(question, options)
+        if role_ids:
+            mention_str = " ".join(f"<@&{rid}>" for rid in role_ids if rid in available_roles)
+            if mention_str:
+                await channel.send(mention_str)
+
+        view = PollView(question, options, max_votes_per_option)
 
         embed = discord.Embed(
             title=f"\U0001f4ca {question}",
@@ -255,7 +279,7 @@ async def send_poll(question: str, options: List[str]) -> bool:
         return True
 
     except discord.Forbidden:
-        logger.error(f"Permission denied sending poll to channel {CHANNEL_ID}")
+        logger.error(f"Permission denied sending poll to channel {target_channel_id}")
         return False
     except discord.HTTPException as e:
         logger.error(f"Discord HTTP error sending poll: {e}", exc_info=True)
@@ -361,6 +385,16 @@ async def on_ready():
     global start_time
     start_time = datetime.now()
     logger.info(f"Bridge Bot online as {bot.user}")
+
+    available_channels.clear()
+    available_roles.clear()
+    for guild in bot.guilds:
+        for ch in guild.text_channels:
+            available_channels[ch.id] = ch.name
+        for r in guild.roles:
+            if not r.is_default():
+                available_roles[r.id] = r.name
+    logger.info(f"Cached {len(available_channels)} channels and {len(available_roles)} roles")
 
     try:
         for guild in bot.guilds:
