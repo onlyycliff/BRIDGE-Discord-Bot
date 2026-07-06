@@ -59,8 +59,19 @@ class ExcelDataManager:
                     ])
                     meta_df.to_excel(writer, sheet_name=self.meta_sheet, index=False)
                     logger.info(f"Poll Metadata sheet created in {self.file_path}")
-        except Exception as e:
-            logger.error(f"Error initializing metadata sheet: {e}")
+        except Exception:
+            try:
+                meta_df = pd.DataFrame(columns=[
+                    "Poll_ID", "Question", "Description", "Options",
+                    "Channel_ID", "Message_ID", "Timestamp"
+                ])
+                with pd.ExcelWriter(self.file_path, engine='openpyxl') as writer:
+                    if self._cache is not None:
+                        self._cache.to_excel(writer, sheet_name=self.main_sheet, index=False)
+                    meta_df.to_excel(writer, sheet_name=self.meta_sheet, index=False)
+                logger.info(f"Poll Metadata sheet created (fallback mode) in {self.file_path}")
+            except Exception as e:
+                logger.error(f"Error initializing metadata sheet (fallback): {e}")
 
     def _load_meta_cache(self) -> None:
         with self.lock:
@@ -129,22 +140,22 @@ class ExcelDataManager:
         if not needs_write:
             return
         try:
-            meta_rows = []
-            for pid, meta in self._meta_cache.items():
-                meta_rows.append({
-                    'Poll_ID': pid,
-                    'Question': meta.get('question', ''),
-                    'Description': meta.get('description', ''),
-                    'Options': json.dumps(meta.get('options', [])),
-                    'Channel_ID': meta.get('channel_id', ''),
-                    'Message_ID': meta.get('message_id', ''),
-                    'Timestamp': meta.get('timestamp', '')
-                })
-            meta_df = pd.DataFrame(meta_rows) if meta_rows else None
             with pd.ExcelWriter(self.file_path, engine='openpyxl') as writer:
                 if self._cache is not None:
                     self._cache.to_excel(writer, sheet_name=self.main_sheet, index=False)
-                if meta_df is not None:
+                if self._meta_dirty and self._meta_cache:
+                    meta_rows = []
+                    for pid, meta in self._meta_cache.items():
+                        meta_rows.append({
+                            'Poll_ID': pid,
+                            'Question': meta.get('question', ''),
+                            'Description': meta.get('description', ''),
+                            'Options': json.dumps(meta.get('options', [])),
+                            'Channel_ID': meta.get('channel_id', ''),
+                            'Message_ID': meta.get('message_id', ''),
+                            'Timestamp': meta.get('timestamp', '')
+                        })
+                    meta_df = pd.DataFrame(meta_rows)
                     meta_df.to_excel(writer, sheet_name=self.meta_sheet, index=False)
             if self._dirty:
                 logger.info(f"Cache flushed to Excel ({len(self._cache)} records)")

@@ -162,7 +162,7 @@ def list_polls():
                 p['active'] = poll_state.is_active(p.get('poll_id'))
         except Exception:
             for p in polls:
-                p['active'] = True
+                p['active'] = False
         return jsonify(polls), 200
     except Exception as e:
         logger.error(f"Error listing polls: {e}", exc_info=True)

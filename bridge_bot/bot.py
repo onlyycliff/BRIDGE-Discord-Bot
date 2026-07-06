@@ -121,10 +121,10 @@ class PollView(View):
 
     def create_vote_handler(self, option: str, index: int):
         async def vote_handler(interaction: discord.Interaction):
-            await self.handle_vote(interaction, option, index)
+            await self.handle_vote(interaction, option)
         return vote_handler
 
-    async def handle_vote(self, interaction: discord.Interaction, choice: str, option_index: int):
+    async def handle_vote(self, interaction: discord.Interaction, choice: str):
         try:
             user_id = interaction.user.id
             user_name = interaction.user.display_name
