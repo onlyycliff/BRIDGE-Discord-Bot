@@ -8,7 +8,7 @@ from datetime import datetime
 import requests
 from flask import Blueprint, jsonify, request, send_file
 from excel_manager import excel_manager
-from bot import send_poll
+from bot import send_poll, end_poll_and_send_results
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +68,7 @@ def create_poll():
             return jsonify({"error": "No JSON data provided"}), 400
 
         question = data.get('question', '').strip()
+        description = data.get('description', '').strip()
         options = data.get('options', [])
         channel_id = data.get('channel_id')
         role_ids = data.get('role_ids')
@@ -120,7 +121,8 @@ def create_poll():
 
             logger.info(f"Scheduling poll: {question} with options: {options}")
             task = asyncio.run_coroutine_threadsafe(
-                send_poll(question, options, channel_id=channel_id, role_ids=role_ids, max_votes_per_option=max_votes_per_option),
+                send_poll(question, options, channel_id=channel_id, role_ids=role_ids,
+                          max_votes_per_option=max_votes_per_option, description=description),
                 loop
             )
 
@@ -198,9 +200,26 @@ def get_poll_detail(poll_id: int):
 @api.route('/polls/<int:poll_id>/end', methods=['POST'])
 def end_poll(poll_id: int):
     try:
-        from bridge_bot.bot import poll_state
+        data = request.get_json(silent=True) or {}
+        send_results = data.get('send_results', False)
+
+        from bridge_bot.bot import poll_state, bot
+
         if not poll_state.end_poll(poll_id):
             return jsonify({"error": "Poll not found or already ended"}), 404
+
+        if send_results:
+            try:
+                loop = bot.loop
+                if loop and not loop.is_closed():
+                    asyncio.run_coroutine_threadsafe(
+                        end_poll_and_send_results(poll_id),
+                        loop
+                    )
+                    logger.info(f"Scheduled results message for poll {poll_id}")
+            except Exception as e:
+                logger.error(f"Failed to schedule results for poll {poll_id}: {e}")
+
         logger.info(f"Poll {poll_id} ended via API")
         return jsonify({"success": True, "message": f"Poll {poll_id} ended"}), 200
     except Exception as e:

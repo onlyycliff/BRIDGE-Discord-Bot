@@ -421,16 +421,26 @@ async function openPollModal(pollId) {
     modal.setAttribute("aria-hidden", "false");
     modal.classList.add("open");
     const endBtn = document.getElementById("end-poll-btn");
+    const sendResultsLabel = document.getElementById("send-results-label");
+    const sendResultsCheckbox = document.getElementById("send-results-checkbox");
     if (endBtn) {
-      endBtn.style.display = data.active !== false ? "block" : "none";
+      const isActive = data.active !== false;
+      endBtn.style.display = isActive ? "block" : "none";
+      if (sendResultsLabel) sendResultsLabel.style.display = isActive ? "flex" : "none";
       endBtn.onclick = async function() {
         if (!confirm('End this poll? Votes will be frozen and buttons disabled on Discord.')) return;
+        const sendResults = sendResultsCheckbox ? sendResultsCheckbox.checked : false;
         try {
-          const r = await fetch("/api/polls/" + pollId + "/end", { method: "POST" });
+          const r = await fetch("/api/polls/" + pollId + "/end", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ send_results: sendResults })
+          });
           const j = await r.json();
           if (r.ok) {
             alert("Poll ended successfully.");
             endBtn.style.display = "none";
+            if (sendResultsLabel) sendResultsLabel.style.display = "none";
             closePollModal();
             loadPollData();
           } else {
@@ -519,9 +529,11 @@ function closePollModal() {
 async function submitPollForm(e) {
   e.preventDefault();
   const q = document.getElementById("poll-question");
+  const descEl = document.getElementById("poll-description");
   const resp = document.getElementById("create-response");
   if (!q || !resp) return;
   const question = q.value.trim();
+  const description = descEl ? descEl.value.trim() : "";
   const optionInputs = document.querySelectorAll(".poll-option-input");
   const options = Array.from(optionInputs).map(function(i) { return i.value.trim(); }).filter(Boolean);
   if (!question) { resp.textContent = "Please enter a question."; return; }
@@ -542,6 +554,7 @@ async function submitPollForm(e) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         question: question,
+        description: description,
         options: options,
         channel_id: channelId,
         role_ids: roleIds,
@@ -552,6 +565,7 @@ async function submitPollForm(e) {
     if (r.ok) {
       resp.textContent = "\u2705 Poll created successfully!";
       q.value = "";
+      if (descEl) descEl.value = "";
       document.getElementById("poll-options-list").innerHTML = "";
       addPollOption(); addPollOption();
       document.querySelectorAll(".role-checkbox:checked").forEach(function(cb) { cb.checked = false; });

@@ -159,6 +159,8 @@
             <div style="display:flex;flex-direction:column;gap:12px;">
               <input id="poll-question" class="search-input" placeholder="Poll question" required />
 
+              <textarea id="poll-description" class="search-input" placeholder="Description (optional) \u2014 shown on the Discord embed" style="min-height:60px;resize:vertical;font-family:inherit;"></textarea>
+
               <select id="poll-channel" class="search-input">
                 <option value="">Default Channel</option>
               </select>
@@ -211,6 +213,10 @@
       <button class="btn btn-secondary" id="refresh-poll-data" style="flex:1;font-size:0.8125rem;">Refresh Poll Data</button>
       <button class="btn btn-danger" id="end-poll-btn" style="flex:1;font-size:0.8125rem;display:none;">End Poll</button>
       </div>
+      <label id="send-results-label" style="display:none;align-items:center;gap:6px;margin-top:8px;font-size:0.8125rem;cursor:pointer;color:var(--color-text-muted);">
+        <input type="checkbox" id="send-results-checkbox" checked />
+        Send voter breakdown to Discord
+      </label>
     </div>
   </div>
 
