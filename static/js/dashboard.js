@@ -48,7 +48,7 @@ function showSection(sectionId) {
   const page = document.getElementById(sectionId);
   if (page) page.classList.add("active");
   if (sectionId === "polls") loadPollData();
-  if (sectionId === "interactive") { loadPollData(); loadChannels(); loadRoles(); }
+  if (sectionId === "interactive") { loadPollData(); loadActivePolls(); loadChannels(); loadRoles(); }
   if (sectionId === "vote-log") loadVoteLogData();
   if (sectionId === "bot-status") loadBotStatusSection();
   loadHealthData();
@@ -403,6 +403,68 @@ async function loadRoles() {
   }
 }
 
+async function loadActivePolls() {
+  const container = document.getElementById("active-polls-list");
+  if (!container) return;
+  try {
+    const response = await fetch("/api/polls");
+    const polls = await response.json();
+    if (!Array.isArray(polls)) return;
+    const active = polls.filter(function(p) { return p.active !== false; });
+    if (active.length === 0) {
+      container.innerHTML = '<p style="color:var(--color-text-muted);">No active polls.</p>';
+      return;
+    }
+    const fragment = document.createDocumentFragment();
+    active.forEach(function(poll) {
+      const row = document.createElement("div");
+      const totalVotes = (poll.options || []).reduce(function(s, o) { return s + (o.votes || 0); }, 0);
+      const leading = (poll.options || []).reduce(function(best, o) {
+        return (o.votes || 0) > (best.votes || 0) ? o : best;
+      }, (poll.options || [])[0] || {});
+      row.style.cssText = "display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--color-border);border-radius:8px;margin-bottom:8px;background:var(--color-surface);";
+      row.innerHTML = '<div style="flex:1;min-width:0;">' +
+        '<div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escapeHtml(poll.question) + '</div>' +
+        '<div style="font-size:0.75rem;color:var(--color-text-muted);margin-top:2px;">' +
+        totalVotes + ' vote' + (totalVotes !== 1 ? 's' : '') +
+        ' &middot; Leading: ' + escapeHtml(leading.name || "N/A") +
+        '</div></div>' +
+        '<label style="display:flex;align-items:center;gap:4px;font-size:0.75rem;white-space:nowrap;cursor:pointer;color:var(--color-text-muted);">' +
+        '<input type="checkbox" class="active-poll-send-results" checked /> Breakdown</label>' +
+        '<button class="btn btn-danger active-poll-end-btn" style="padding:6px 14px;font-size:0.75rem;white-space:nowrap;" data-poll-id="' + poll.poll_id + '">End</button>';
+      fragment.appendChild(row);
+    });
+    container.innerHTML = "";
+    container.appendChild(fragment);
+    container.querySelectorAll(".active-poll-end-btn").forEach(function(btn) {
+      btn.addEventListener("click", async function() {
+        var pollId = btn.getAttribute("data-poll-id");
+        var sendResults = btn.parentElement.querySelector(".active-poll-send-results").checked;
+        if (!confirm('End poll #' + pollId + '? Votes will be frozen.')) return;
+        try {
+          var r = await fetch("/api/polls/" + pollId + "/end", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ send_results: sendResults })
+          });
+          var j = await r.json();
+          if (r.ok) {
+            loadActivePolls();
+            loadPollData();
+          } else {
+            alert("Error: " + (j.error || "Unknown"));
+          }
+        } catch (e) {
+          alert("Network error ending poll.");
+        }
+      });
+    });
+  } catch (e) {
+    console.error("Error loading active polls:", e);
+    container.innerHTML = '<p style="color:var(--color-text-muted);">Error loading polls.</p>';
+  }
+}
+
 let githubProfileData = null;
 let pollChartInstance = null;
 
@@ -632,7 +694,7 @@ function startAutoRefresh() {
     var active = document.querySelector(".page.active");
     if (!active) return;
     var id = active.id;
-    if (id === "polls" || id === "interactive") loadPollData();
+    if (id === "polls" || id === "interactive") { loadPollData(); loadActivePolls(); }
     if (id === "vote-log") loadVoteLogData();
     if (id === "bot-status") loadBotStatusSection();
     loadHealthData();
@@ -649,7 +711,7 @@ function updateAllData() {
   loadHealthData();
   var active = document.querySelector(".page.active");
   if (!active) return;
-  if (active.id === "polls" || active.id === "interactive") loadPollData();
+  if (active.id === "polls" || active.id === "interactive") { loadPollData(); loadActivePolls(); }
   if (active.id === "vote-log") loadVoteLogData();
   if (active.id === "bot-status") loadBotStatusSection();
 }
