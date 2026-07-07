@@ -9,7 +9,14 @@ from discord.ext import commands
 from discord.ui import View
 from dotenv import load_dotenv
 
-from excel_manager import excel_manager
+from db.enums import QuestionType
+from db.repository import (
+    add_vote as db_add_vote,
+    add_poll_metadata,
+    end_poll,
+    get_poll_metadata,
+    get_poll_stats,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -95,6 +102,8 @@ class PollView(View):
         self.max_votes_per_option = max_votes_per_option
         self.channel_id: Optional[int] = None
         self.message_id: Optional[int] = None
+        self.question_id: Optional[int] = None
+        self.option_map: Dict[str, int] = {}
 
         self.votes = {option: 0 for option in options}
         self.buttons = []
@@ -167,15 +176,16 @@ class PollView(View):
             self._update_embed_fields(embed)
 
             try:
-                excel_manager.add_vote(
+                opt_id = self.option_map.get(choice)
+                await db_add_vote(
                     username=user_name,
                     user_id=user_id,
-                    question=self.question,
-                    choice=choice,
-                    poll_id=self.poll_id
+                    question_id=self.question_id,
+                    option_id=opt_id,
+                    question_type=QuestionType.single_choice,
                 )
             except Exception as e:
-                logger.error(f"Failed to log vote to Excel: {e}")
+                logger.error(f"Failed to log vote to DB: {e}")
 
             # Send confirmation embed with standings
             confirm_embed = discord.Embed(
@@ -315,16 +325,21 @@ async def send_poll(
         view.message_id = msg.id
 
         try:
-            excel_manager.add_poll_metadata(
+            guild_id = channel.guild.id if channel.guild else 0
+            result = await add_poll_metadata(
                 poll_id=view.poll_id,
                 question=question,
-                options=options,
+                options=list(options),
                 channel_id=channel.id,
                 message_id=msg.id,
-                description=description
+                guild_id=guild_id,
+                description=description,
             )
+            if result:
+                view.question_id = result["question_id"]
+                view.option_map = result["option_map"]
         except Exception as e:
-            logger.error(f"Failed to save poll metadata: {e}")
+            logger.error(f"Failed to save poll metadata to DB: {e}")
 
         logger.info(f"Poll created - Question: {question}, Options: {len(options)}, Poll ID: {view.poll_id}, Message ID: {msg.id}")
         return True
@@ -343,13 +358,14 @@ async def send_poll(
 async def end_poll_and_send_results(poll_id: int) -> bool:
     try:
         poll_state.end_poll(poll_id)
+        await end_poll(poll_id)
 
-        stats = excel_manager.get_poll_stats(poll_id)
+        stats = await get_poll_stats(poll_id)
         if not stats:
             logger.warning(f"No stats found for poll {poll_id}, sending basic end message")
             return False
 
-        meta = excel_manager.get_poll_metadata(poll_id)
+        meta = await get_poll_metadata(poll_id)
         channel_id = meta.get('channel_id') if meta else None
 
         if not channel_id:
