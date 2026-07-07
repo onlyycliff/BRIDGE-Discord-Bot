@@ -10,7 +10,7 @@ __pycache__/
 dist/
 build/
 
-# Data files
+# Data files (legacy Excel — kept in gitignore for safety)
 responses.xlsx
 ~$responses.xlsx
 poll_feedback.csv

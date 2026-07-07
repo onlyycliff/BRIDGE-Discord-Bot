@@ -146,12 +146,12 @@ async function loadHealthData() {
     if (!data) return;
     var recordsEl = document.getElementById('health-records');
     var lastEl = document.getElementById('health-last');
-    var sizeEl = document.getElementById('health-size');
+    var dbEl = document.getElementById('health-db');
     var cacheEl = document.getElementById('health-cache');
     if (recordsEl) recordsEl.textContent = data.total_records + ' records';
     if (lastEl) lastEl.textContent = data.last_timestamp !== 'N/A' ? new Date(data.last_timestamp).toLocaleString() : 'N/A';
-    if (sizeEl) sizeEl.textContent = data.file_size;
-    if (cacheEl) cacheEl.textContent = data.cache_dirty ? '\uD83D\uDD35 Syncing...' : '\uD83D\uDFE2 Synced';
+    if (dbEl) dbEl.textContent = data.storage || 'PostgreSQL';
+    if (cacheEl) cacheEl.textContent = data.status === 'healthy' ? '\u2705 Connected' : '\u274c Disconnected';
   } catch (e) { if (e.name === 'AbortError') return; }
 }
 
