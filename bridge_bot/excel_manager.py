@@ -61,13 +61,18 @@ class ExcelDataManager:
                     logger.info(f"Poll Metadata sheet created in {self.file_path}")
         except Exception:
             try:
+                existing_main = pd.DataFrame()
+                try:
+                    existing_main = pd.read_excel(self.file_path, sheet_name=self.main_sheet)
+                except Exception:
+                    pass
                 meta_df = pd.DataFrame(columns=[
                     "Poll_ID", "Question", "Description", "Options",
                     "Channel_ID", "Message_ID", "Timestamp"
                 ])
                 with pd.ExcelWriter(self.file_path, engine='openpyxl') as writer:
-                    if self._cache is not None:
-                        self._cache.to_excel(writer, sheet_name=self.main_sheet, index=False)
+                    if not existing_main.empty:
+                        existing_main.to_excel(writer, sheet_name=self.main_sheet, index=False)
                     meta_df.to_excel(writer, sheet_name=self.meta_sheet, index=False)
                 logger.info(f"Poll Metadata sheet created (fallback mode) in {self.file_path}")
             except Exception as e:
@@ -80,7 +85,10 @@ class ExcelDataManager:
                 df = pd.read_excel(self.file_path, sheet_name=self.meta_sheet)
                 if not df.empty:
                     for _, row in df.iterrows():
-                        pid = int(row.get('Poll_ID', 0))
+                        raw_pid = row.get('Poll_ID')
+                        if pd.isna(raw_pid):
+                            continue
+                        pid = int(raw_pid)
                         if pid:
                             opts_raw = row.get('Options', '[]')
                             try:
@@ -170,12 +178,18 @@ class ExcelDataManager:
             self._flush_all()
         self._start_flush_loop()
 
-    def _final_flush(self):
-        if self._flush_timer:
-            self._flush_timer.cancel()
+    def flush_now(self) -> None:
         with self.lock:
             self._flush_all()
-            print("Final cache flush on shutdown")
+
+    def _final_flush(self):
+        try:
+            if self._flush_timer:
+                self._flush_timer.cancel()
+            self.flush_now()
+            logger.info("Final cache flush on shutdown")
+        except Exception as e:
+            logger.error(f"Error during final flush: {e}")
 
     def _maybe_backup(self) -> None:
         self._vote_count += 1

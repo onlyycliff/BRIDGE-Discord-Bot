@@ -22,7 +22,7 @@ load_dotenv()
 intents = discord.Intents.default()
 intents.message_content = True
 
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(command_prefix=os.getenv("BOT_PREFIX", "!"), intents=intents, help_command=None)
 
 start_time = None
 
@@ -128,6 +128,9 @@ class PollView(View):
 
     async def handle_vote(self, interaction: discord.Interaction, choice: str):
         try:
+            if interaction.user.bot:
+                return
+
             user_id = interaction.user.id
             user_name = interaction.user.display_name
 
@@ -157,6 +160,9 @@ class PollView(View):
             self.votes[choice] += 1
             logger.info(f"Vote recorded - User: {user_name} ({user_id}), Choice: {choice}, Poll: {self.poll_id}")
 
+            if not interaction.message.embeds:
+                logger.error("No embeds found in poll message")
+                return
             embed = interaction.message.embeds[0]
             self._update_embed_fields(embed)
 
@@ -280,8 +286,9 @@ async def send_poll(
                 return False
 
         if role_ids:
-            mention_str = " ".join(f"<@&{rid}>" for rid in role_ids if rid in available_roles)
-            if mention_str:
+            valid_roles = [rid for rid in role_ids if int(rid) in available_roles]
+            if valid_roles:
+                mention_str = " ".join(f"<@&{rid}>" for rid in valid_roles)
                 await channel.send(mention_str)
 
         view = PollView(question, options, max_votes_per_option, description)

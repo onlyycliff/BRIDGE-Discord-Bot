@@ -9,37 +9,40 @@ import logging
 import threading
 from pathlib import Path
 
-# Ensure bridge_bot directory is on sys.path (fixes Railway ModuleNotFoundError)
-sys.path.insert(0, str(Path(__file__).resolve().parent / 'bridge_bot'))
+_BRIDGE_BOT_DIR = str(Path(__file__).resolve().parent / 'bridge_bot')
+if _BRIDGE_BOT_DIR not in sys.path:
+    sys.path.insert(0, _BRIDGE_BOT_DIR)
 
 from flask import Flask, render_template, redirect, url_for
 from bot import start_bot, bot
 from api import api
 
-# Setup logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
+app = Flask(__name__, template_folder='templates', static_folder='static')
+dashboard = app
+
+_bot_started = False
+_bot_thread_lock = threading.Lock()
+
 def run_bot_thread():
-    """Run Discord bot in background thread"""
     try:
         logger.info("Starting Discord bot...")
         start_bot()
     except Exception as e:
         logger.error(f"Bot error: {e}")
 
-# Initialize Flask application
-app = Flask(__name__, template_folder='templates', static_folder='static')
-dashboard = app
-
-# Auto-start bot thread on import (for gunicorn/Railway)
-_bot_started = False
 def _ensure_bot_started():
     global _bot_started
-    if not _bot_started:
+    if _bot_started:
+        return
+    with _bot_thread_lock:
+        if _bot_started:
+            return
         _bot_started = True
         thread = threading.Thread(target=run_bot_thread, daemon=True)
         thread.start()
@@ -47,7 +50,6 @@ def _ensure_bot_started():
 
 _ensure_bot_started()
 
-# Register API blueprint
 dashboard.register_blueprint(api)
 
 @dashboard.route('/')

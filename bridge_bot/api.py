@@ -1,6 +1,8 @@
 import os
+import re
 import logging
 import asyncio
+import time
 from pathlib import Path
 from typing import List, Dict, Optional
 from datetime import datetime
@@ -8,11 +10,27 @@ from datetime import datetime
 import requests
 from flask import Blueprint, jsonify, request, send_file
 from excel_manager import excel_manager
-from bot import send_poll, end_poll_and_send_results
+from bot import send_poll, end_poll_and_send_results, poll_state, bot
 
 logger = logging.getLogger(__name__)
 
 api = Blueprint('api', __name__, url_prefix='/api')
+
+MENTION_PATTERN = re.compile(r'@(everyone|here)', re.IGNORECASE)
+
+_rate_limit_store: Dict[str, float] = {}
+RATE_LIMIT_WINDOW = 1.0
+
+def _check_rate_limit(key: str) -> bool:
+    now = time.time()
+    last = _rate_limit_store.get(key)
+    if last and now - last < RATE_LIMIT_WINDOW:
+        return False
+    _rate_limit_store[key] = now
+    return True
+
+def _sanitize_mentions(text: str) -> str:
+    return MENTION_PATTERN.sub('\u200b@\\1', text)
 
 @api.route('/health', methods=['GET'])
 def health_check():
@@ -62,17 +80,23 @@ def list_roles():
 @api.route('/polls/create', methods=['POST'])
 def create_poll():
     try:
+        if not _check_rate_limit('create_poll'):
+            return jsonify({"error": "Rate limited. Please wait before creating another poll."}), 429
+
         data = request.get_json()
 
         if not data:
             return jsonify({"error": "No JSON data provided"}), 400
 
-        question = data.get('question', '').strip()
-        description = data.get('description', '').strip()
+        question = data.get('question', '').strip()[:200]
+        description = data.get('description', '').strip()[:1000]
         options = data.get('options', [])
         channel_id = data.get('channel_id')
         role_ids = data.get('role_ids')
         max_votes_per_option = data.get('max_votes_per_option')
+
+        question = _sanitize_mentions(question)
+        description = _sanitize_mentions(description)
 
         if not question:
             return jsonify({"error": "Question is required"}), 400
@@ -83,57 +107,55 @@ def create_poll():
         if len(options) > 5:
             return jsonify({"error": "Maximum 5 options allowed"}), 400
 
-        options = [opt.strip() for opt in options if opt.strip()]
+        options = [opt.strip()[:100] for opt in options if opt.strip()]
         options = list(dict.fromkeys(options))
 
         if len(options) < 2:
             return jsonify({"error": "Need at least 2 unique options"}), 400
 
         if channel_id is not None:
-            channel_id = int(channel_id)
+            try:
+                channel_id = int(channel_id)
+            except (ValueError, TypeError):
+                return jsonify({"error": "Invalid channel_id"}), 400
 
         if role_ids is not None:
             if not isinstance(role_ids, list):
                 return jsonify({"error": "role_ids must be a list"}), 400
-            role_ids = [int(rid) for rid in role_ids]
+            try:
+                role_ids = [int(rid) for rid in role_ids]
+            except (ValueError, TypeError):
+                return jsonify({"error": "role_ids must contain valid integers"}), 400
 
         if max_votes_per_option is not None:
-            max_votes_per_option = int(max_votes_per_option)
+            try:
+                max_votes_per_option = int(max_votes_per_option)
+            except (ValueError, TypeError):
+                return jsonify({"error": "max_votes_per_option must be an integer"}), 400
             if max_votes_per_option < 1:
                 return jsonify({"error": "max_votes_per_option must be at least 1"}), 400
 
+        if not bot or not bot.is_ready():
+            logger.warning("Bot not ready for poll creation")
+            return jsonify({"error": "Bot not connected to Discord"}), 503
+
+        loop = bot.loop
+        if not loop or loop.is_closed():
+            logger.error("Event loop not available or closed")
+            return jsonify({"error": "Bot event loop unavailable"}), 503
+
+        logger.info(f"Scheduling poll: {question} with options: {options}")
+        future = asyncio.run_coroutine_threadsafe(
+            send_poll(question, options, channel_id=channel_id, role_ids=role_ids,
+                      max_votes_per_option=max_votes_per_option, description=description),
+            loop
+        )
+
         try:
-            from bot import bot
-
-            if not bot or not bot.is_ready():
-                logger.warning("Bot not ready for poll creation")
-                return jsonify({"error": "Bot not connected to Discord"}), 503
-
-            loop = None
-            try:
-                loop = bot.loop
-            except (AttributeError, RuntimeError):
-                logger.warning("Could not get bot event loop, attempting fallback")
-
-            if not loop or loop.is_closed():
-                logger.error("Event loop not available or closed")
-                return jsonify({"error": "Bot event loop unavailable"}), 503
-
-            logger.info(f"Scheduling poll: {question} with options: {options}")
-            task = asyncio.run_coroutine_threadsafe(
-                send_poll(question, options, channel_id=channel_id, role_ids=role_ids,
-                          max_votes_per_option=max_votes_per_option, description=description),
-                loop
-            )
-
-            success = task.result(timeout=10)
-
+            success = future.result(timeout=10)
         except asyncio.TimeoutError:
             logger.error(f"Timeout scheduling poll: {question}")
             return jsonify({"error": "Poll creation timed out"}), 504
-        except Exception as inner_e:
-            logger.error(f"Error scheduling poll: {inner_e}", exc_info=True)
-            return jsonify({"error": f"Failed to send poll: {str(inner_e)}"}), 500
 
         if not success:
             logger.warning(f"Poll creation returned False for: {question}")
@@ -176,7 +198,6 @@ def get_poll_detail(poll_id: int):
         if not stats:
             return jsonify({"error": "Poll not found"}), 404
 
-        from bridge_bot.bot import poll_state
         is_active = poll_state.is_active(poll_id)
 
         options_list = [
@@ -202,8 +223,6 @@ def end_poll(poll_id: int):
     try:
         data = request.get_json(silent=True) or {}
         send_results = data.get('send_results', False)
-
-        from bridge_bot.bot import poll_state, bot
 
         if not poll_state.end_poll(poll_id):
             return jsonify({"error": "Poll not found or already ended"}), 404
