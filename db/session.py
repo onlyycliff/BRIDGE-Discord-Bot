@@ -67,6 +67,39 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
+async def check_db() -> bool:
+    """Verify the database is reachable with a lightweight query.
+
+    Returns True if the connection succeeds, False otherwise.
+    """
+    try:
+        factory = get_factory()
+        async with factory() as session:
+            from sqlalchemy import text
+            await session.execute(text("SELECT 1"))
+            logger.info("Database connectivity check passed")
+            return True
+    except Exception as e:
+        logger.error(f"Database connectivity check failed: {e}")
+        return False
+
+
+async def ensure_db(timeout: float = 15.0) -> None:
+    """Block until the database is reachable, raising on timeout.
+
+    Called at startup so the application never serves requests before
+    the database is ready (particularly important on Railway where the
+    Postgres container may still be provisioning).
+    """
+    import asyncio
+    deadline = asyncio.get_event_loop().time() + timeout
+    while asyncio.get_event_loop().time() < deadline:
+        ok = await check_db()
+        if ok:
+            return
+        await asyncio.sleep(1)
+
+
 async def dispose_engine():
     global _engine
     if _engine:
