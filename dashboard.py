@@ -13,7 +13,8 @@ _BRIDGE_BOT_DIR = str(Path(__file__).resolve().parent / 'bridge_bot')
 if _BRIDGE_BOT_DIR not in sys.path:
     sys.path.insert(0, _BRIDGE_BOT_DIR)
 
-from flask import Flask, render_template, redirect, url_for
+from flask import Flask, jsonify
+from flask_cors import CORS
 from bot import start_bot, bot
 from api import api
 
@@ -23,8 +24,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__, template_folder='templates', static_folder='static')
+app = Flask(__name__)
 dashboard = app
+
+cors_origin = os.getenv("CORS_ORIGIN", "http://localhost:5173")
+CORS(dashboard, resources={r"/api/*": {"origins": cors_origin}})
+logger.info(f"CORS configured for origin: {cors_origin}")
 
 _bot_started = False
 _bot_thread_lock = threading.Lock()
@@ -54,17 +59,21 @@ dashboard.register_blueprint(api)
 
 @dashboard.route('/')
 def home():
-    """Serve main dashboard page"""
-    try:
-        return render_template('dashboard.html')
-    except Exception as e:
-        logger.error(f"Error loading dashboard: {e}")
-        return f"Error loading dashboard: {e}", 500
+    """API root — returns service info"""
+    return jsonify({
+        "service": "Bridge 2026 Dashboard API",
+        "version": "2.0.0",
+        "docs": "/api/health",
+        "frontend": os.getenv("FRONTEND_URL", "http://localhost:5173")
+    })
 
 @dashboard.route('/create-poll')
 def create_poll_redirect():
-    """Permanent redirect to dashboard (Live Control)"""
-    return redirect(url_for('home'), 301)
+    """Informational — poll creation is at POST /api/polls/create"""
+    return jsonify({
+        "message": "Use POST /api/polls/create to create a poll",
+        "docs": "/api/health"
+    })
 
 @dashboard.errorhandler(404)
 def not_found(error):

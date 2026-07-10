@@ -32,6 +32,15 @@ def _check_rate_limit(key: str) -> bool:
 def _sanitize_mentions(text: str) -> str:
     return MENTION_PATTERN.sub('\u200b@\\1', text)
 
+def _validate_int_param(value, name: str, default=None):
+    """Validate and convert a query param to int, returning a 400 on failure."""
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return None
+
 @api.route('/health', methods=['GET'])
 def health_check():
     try:
@@ -249,11 +258,17 @@ def end_poll(poll_id: int):
 @api.route('/votes', methods=['GET'])
 def get_votes_paginated():
     try:
-        votes = excel_manager.get_all_votes()
-        page = request.args.get("page", 1, type=int)
-        limit = request.args.get("limit", 25, type=int)
+        page = _validate_int_param(request.args.get("page"), "page", 1)
+        limit = _validate_int_param(request.args.get("limit"), "limit", 25)
         question_filter = request.args.get("question")
         username_filter = request.args.get("username")
+
+        if page is None or page < 1:
+            return jsonify({"error": "page must be a positive integer"}), 400
+        if limit is None or limit < 1 or limit > 100:
+            return jsonify({"error": "limit must be an integer between 1 and 100"}), 400
+
+        votes = excel_manager.get_all_votes()
 
         if question_filter:
             votes = [v for v in votes if question_filter.lower() in str(v.get("Question", "")).lower()]
@@ -362,7 +377,10 @@ def get_all_votes():
 
         question_filter = request.args.get('question')
         username_filter = request.args.get('username')
-        limit = request.args.get('limit', type=int)
+        limit = _validate_int_param(request.args.get('limit'), 'limit')
+
+        if limit is not None and (limit < 1 or limit > 1000):
+            return jsonify({"error": "limit must be between 1 and 1000"}), 400
 
         if question_filter:
             votes = [v for v in votes if question_filter.lower() in str(v.get('Question', '')).lower()]
