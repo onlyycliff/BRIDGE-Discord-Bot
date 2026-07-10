@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from "react"
+import { motion } from "framer-motion"
 import { api } from "@/api/client"
 import type { Poll, DiscordChannel, DiscordRole, CreatePollPayload } from "@/api/types"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
+import { usePolling } from "@/hooks/use-polling"
 import { RefreshCw, AlertCircle, Send, Plus, X } from "lucide-react"
 
 interface ActivePoll extends Poll {
@@ -36,6 +39,19 @@ const initialForm: FormFields = {
   maxVotes: "",
 }
 
+function ActivePollsSkeleton() {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div key={i} className="rounded-lg border p-3 space-y-2">
+          <Skeleton className="h-4 w-3/4" />
+          <Skeleton className="h-3 w-1/4" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export function LiveControl() {
   const [form, setForm] = useState<FormFields>(initialForm)
   const [submitting, setSubmitting] = useState(false)
@@ -57,8 +73,7 @@ export function LiveControl() {
     }
   }, [])
 
-  const fetchPolls = useCallback(async () => {
-    setPollsState({ status: "loading" })
+  const fetchPolls = useCallback(async (options?: { silent?: boolean }) => {
     try {
       const polls = await api.get<ActivePoll[]>("/api/polls")
       const active = polls.filter((p) => p.active !== false)
@@ -68,7 +83,10 @@ export function LiveControl() {
         setPollsState({ status: "loaded", polls: active })
       }
     } catch (err) {
-      setPollsState({ status: "error", message: err instanceof Error ? err.message : "Failed to load polls" })
+      setPollsState((prev) => {
+        if (options?.silent && prev.status === "loaded") return prev
+        return { status: "error", message: err instanceof Error ? err.message : "Failed to load polls" }
+      })
     }
   }, [])
 
@@ -76,6 +94,8 @@ export function LiveControl() {
     fetchData()
     fetchPolls()
   }, [fetchData, fetchPolls])
+
+  usePolling(() => fetchPolls({ silent: true }))
 
   function setOption(idx: number, value: string) {
     setForm((f) => {
@@ -235,8 +255,11 @@ export function LiveControl() {
                       <Badge
                         key={role.id}
                         variant={form.roleIds.includes(Number(role.id)) ? "default" : "outline"}
-                        className="cursor-pointer"
+                        className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        tabIndex={0}
+                        role="button"
                         onClick={() => toggleRole(Number(role.id))}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleRole(Number(role.id)) } }}
                       >
                         @{role.name}
                       </Badge>
@@ -275,39 +298,50 @@ export function LiveControl() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Active Polls</CardTitle>
-              <Button variant="ghost" size="sm" onClick={fetchPolls}>
+              <Button variant="ghost" size="sm" onClick={() => fetchPolls()}>
                 <RefreshCw className="h-4 w-4" />
               </Button>
             </div>
           </CardHeader>
           <CardContent>
             {pollsState.status === "loading" && (
-              <p className="text-sm text-muted-foreground">Loading...</p>
+              <ActivePollsSkeleton />
             )}
             {pollsState.status === "error" && (
               <div className="flex flex-col items-center gap-3 py-8">
                 <AlertCircle className="h-8 w-8 text-destructive" />
                 <p className="text-sm text-muted-foreground text-center">{pollsState.message}</p>
-                <Button variant="outline" size="sm" onClick={fetchPolls}>Retry</Button>
+                <Button variant="outline" size="sm" onClick={() => fetchPolls()}>Retry</Button>
               </div>
             )}
             {pollsState.status === "empty" && (
               <p className="text-sm text-muted-foreground">No active polls.</p>
             )}
             {pollsState.status === "loaded" && (
-              <div className="space-y-3">
-                {pollsState.polls.map((poll) => (
-                  <div key={poll.poll_id} className="rounded-lg border p-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm font-medium leading-snug">{poll.question}</p>
-                      <Badge variant="success">Live</Badge>
+              <motion.div className="space-y-3" layout>
+                {pollsState.polls.map((poll, idx) => (
+                  <motion.div
+                    key={poll.poll_id}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2, delay: idx * 0.05 }}
+                    layout
+                  >
+                    <div
+                      className="rounded-lg border p-3 hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-colors"
+                      tabIndex={0}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm font-medium leading-snug">{poll.question}</p>
+                        <Badge variant="success">Live</Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {poll.total_votes} vote{poll.total_votes !== 1 ? "s" : ""}
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {poll.total_votes} vote{poll.total_votes !== 1 ? "s" : ""}
-                    </p>
-                  </div>
+                  </motion.div>
                 ))}
-              </div>
+              </motion.div>
             )}
           </CardContent>
         </Card>

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react"
+import { motion, AnimatePresence } from "framer-motion"
 import { api } from "@/api/client"
 import type { PaginatedVotes } from "@/api/types"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Input } from "@/components/ui/input"
+import { usePolling } from "@/hooks/use-polling"
 import { Download, RefreshCw, AlertCircle, ClipboardList, ChevronLeft, ChevronRight } from "lucide-react"
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000"
@@ -19,11 +21,18 @@ type State =
 function TableSkeleton() {
   return (
     <div className="space-y-3">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <Skeleton key={i} className="h-10 w-full" />
-      ))}
+      <Skeleton className="h-10 w-full" />
+      <Skeleton className="h-10 w-full" />
+      <Skeleton className="h-10 w-full" />
+      <Skeleton className="h-10 w-full" />
+      <Skeleton className="h-10 w-full" />
     </div>
   )
+}
+
+const rowVariants = {
+  hidden: { opacity: 0, x: -8 },
+  visible: { opacity: 1, x: 0 },
 }
 
 function formatTimestamp(ts: string) {
@@ -40,8 +49,7 @@ export function VoteLog() {
   const [search, setSearch] = useState("")
   const searchRef = useRef<HTMLInputElement>(null)
 
-  const fetchVotes = useCallback(async (p: number, q: string) => {
-    setState({ status: "loading" })
+  const fetchVotes = useCallback(async (p: number, q: string, options?: { silent?: boolean }) => {
     try {
       const params = new URLSearchParams({ page: String(p), limit: String(PAGE_SIZE) })
       if (q.trim()) {
@@ -54,13 +62,23 @@ export function VoteLog() {
         setState({ status: "loaded", data })
       }
     } catch (err) {
-      setState({ status: "error", message: err instanceof Error ? err.message : "Failed to load votes" })
+      setState((prev) => {
+        if (options?.silent && prev.status === "loaded") return prev
+        return { status: "error", message: err instanceof Error ? err.message : "Failed to load votes" }
+      })
     }
   }, [])
 
   useEffect(() => {
     fetchVotes(page, search)
   }, [page, search, fetchVotes])
+
+  const hasActiveSearch = search.trim().length > 0
+  usePolling(
+    () => fetchVotes(page, search, { silent: true }),
+    undefined,
+    !hasActiveSearch,
+  )
 
   const handleSearch = () => {
     setPage(1)
@@ -88,7 +106,9 @@ export function VoteLog() {
   if (state.status === "loading") {
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-bold">Vote Log</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Vote Log</h1>
+        </div>
         <TableSkeleton />
       </div>
     )
@@ -97,7 +117,9 @@ export function VoteLog() {
   if (state.status === "error") {
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-bold">Vote Log</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Vote Log</h1>
+        </div>
         <Card>
           <CardContent className="flex flex-col items-center gap-4 py-12">
             <AlertCircle className="h-12 w-12 text-destructive" />
@@ -115,7 +137,9 @@ export function VoteLog() {
   if (state.status === "empty") {
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-bold">Vote Log</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Vote Log</h1>
+        </div>
         <Card>
           <CardContent className="flex flex-col items-center gap-4 py-12">
             <ClipboardList className="h-12 w-12 text-muted-foreground" />
@@ -167,14 +191,25 @@ export function VoteLog() {
               </tr>
             </thead>
             <tbody>
-              {data.votes.map((vote, idx) => (
-                <tr key={idx} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                  <td className="p-3 text-muted-foreground whitespace-nowrap">{formatTimestamp(vote.timestamp)}</td>
-                  <td className="p-3">{vote.username}</td>
-                  <td className="p-3 max-w-xs truncate">{vote.question}</td>
-                  <td className="p-3 font-medium">{vote.choice}</td>
-                </tr>
-              ))}
+              <AnimatePresence mode="popLayout">
+                {data.votes.map((vote, idx) => (
+                  <motion.tr
+                    key={`${vote.timestamp}-${vote.user_id}-${idx}`}
+                    variants={rowVariants}
+                    initial="hidden"
+                    animate="visible"
+                    exit="hidden"
+                    transition={{ duration: 0.2, delay: idx * 0.02 }}
+                    className="border-b last:border-0 hover:bg-muted/30 focus-visible:bg-muted/50 outline-none transition-colors"
+                    tabIndex={0}
+                  >
+                    <td className="p-3 text-muted-foreground whitespace-nowrap">{formatTimestamp(vote.timestamp)}</td>
+                    <td className="p-3">{vote.username}</td>
+                    <td className="p-3 max-w-xs truncate">{vote.question}</td>
+                    <td className="p-3 font-medium">{vote.choice}</td>
+                  </motion.tr>
+                ))}
+              </AnimatePresence>
             </tbody>
           </table>
         </div>

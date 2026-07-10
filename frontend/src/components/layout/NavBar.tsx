@@ -30,7 +30,7 @@ export function NavBar({ activePath, onNavigate }: NavBarProps) {
               <button
                 key={item.path}
                 onClick={() => onNavigate(item.path)}
-                className={`inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap
+                className={`inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
                   ${isActive
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:text-foreground hover:bg-accent"
