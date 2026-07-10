@@ -67,3 +67,19 @@ export interface DiscordRole {
   id: string
   name: string
 }
+
+export interface CreatePollResponse {
+  success: boolean
+  message: string
+  question: string
+  options: string[]
+}
+
+export interface CreatePollPayload {
+  question: string
+  description?: string
+  options: string[]
+  channel_id?: number | null
+  role_ids?: number[]
+  max_votes_per_option?: number | null
+}
