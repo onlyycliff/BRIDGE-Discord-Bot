@@ -159,6 +159,8 @@
             <div style="display:flex;flex-direction:column;gap:12px;">
               <input id="poll-question" class="search-input" placeholder="Poll question" required />
 
+              <textarea id="poll-description" class="search-input" placeholder="Description (optional) &mdash; shown on the Discord embed" style="min-height:60px;resize:vertical;font-family:inherit;"></textarea>
+
               <select id="poll-channel" class="search-input">
                 <option value="">Default Channel</option>
               </select>
@@ -180,6 +182,13 @@
             </div>
           </form>
           <div id="create-response" style="margin-top:12px;font-size:0.8125rem;color:var(--color-text-muted)"></div>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title">Active Polls</h3>
+          <div id="active-polls-list" style="font-size:0.8125rem;">
+            <p style="color:var(--color-text-muted);">Loading...</p>
+          </div>
         </div>
 
       </div>
@@ -211,8 +220,14 @@
       <button class="btn btn-secondary" id="refresh-poll-data" style="flex:1;font-size:0.8125rem;">Refresh Poll Data</button>
       <button class="btn btn-danger" id="end-poll-btn" style="flex:1;font-size:0.8125rem;display:none;">End Poll</button>
       </div>
+      <label id="send-results-label" style="display:none;align-items:center;gap:6px;margin-top:8px;font-size:0.8125rem;cursor:pointer;color:var(--color-text-muted);">
+        <input type="checkbox" id="send-results-checkbox" checked />
+        Send voter breakdown to Discord
+      </label>
     </div>
   </div>
+
+  <div id="toast-container"></div>
 
   <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 </body>

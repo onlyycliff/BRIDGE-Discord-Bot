@@ -22,7 +22,7 @@ load_dotenv()
 intents = discord.Intents.default()
 intents.message_content = True
 
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(command_prefix=os.getenv("BOT_PREFIX", "!"), intents=intents, help_command=None)
 
 start_time = None
 
@@ -64,7 +64,7 @@ class PollState:
         return False
 
     def is_active(self, poll_id: int) -> bool:
-        return self.active.get(poll_id, True)
+        return self.active.get(poll_id, False)
 
     def get_poll_data(self, poll_id: int) -> Optional[Dict]:
         poll = self.polls.get(poll_id)
@@ -86,14 +86,18 @@ poll_state = PollState()
 class PollView(View):
     """Interactive poll with progress bars and vote tracking"""
 
-    def __init__(self, question: str, options: List[str], max_votes_per_option: Optional[int] = None):
-        super().__init__()
+    def __init__(self, question: str, options: List[str], max_votes_per_option: Optional[int] = None, description: str = ''):
+        super().__init__(timeout=None)
         self.question = question
         self.options = options
+        self.description = description
         self.poll_id = int(time.time() * 1000)
         self.max_votes_per_option = max_votes_per_option
+        self.channel_id: Optional[int] = None
+        self.message_id: Optional[int] = None
 
         self.votes = {option: 0 for option in options}
+        self.buttons = []
 
         poll_state.add_poll(self.poll_id, self)
 
@@ -114,15 +118,19 @@ class PollView(View):
                 custom_id=f"poll_{self.poll_id}_{i}"
             )
             button.callback = self.create_vote_handler(option, i)
+            self.buttons.append(button)
             self.add_item(button)
 
     def create_vote_handler(self, option: str, index: int):
         async def vote_handler(interaction: discord.Interaction):
-            await self.handle_vote(interaction, option, index)
+            await self.handle_vote(interaction, option)
         return vote_handler
 
-    async def handle_vote(self, interaction: discord.Interaction, choice: str, option_index: int):
+    async def handle_vote(self, interaction: discord.Interaction, choice: str):
         try:
+            if interaction.user.bot:
+                return
+
             user_id = interaction.user.id
             user_name = interaction.user.display_name
 
@@ -133,7 +141,7 @@ class PollView(View):
                 )
                 return
 
-            if self.max_votes_per_option is not None and self.votes.get(choice, 0) >= self.max_votes_per_option:
+            if self.max_votes_per_option is not None and self.votes[choice] >= self.max_votes_per_option:
                 await interaction.response.send_message(
                     f"\u274c The limit of **{self.max_votes_per_option}** votes for **{choice}** has been reached.",
                     ephemeral=True
@@ -152,6 +160,9 @@ class PollView(View):
             self.votes[choice] += 1
             logger.info(f"Vote recorded - User: {user_name} ({user_id}), Choice: {choice}, Poll: {self.poll_id}")
 
+            if not interaction.message.embeds:
+                logger.error("No embeds found in poll message")
+                return
             embed = interaction.message.embeds[0]
             self._update_embed_fields(embed)
 
@@ -190,9 +201,14 @@ class PollView(View):
                 inline=False
             )
 
+            self._refresh_button_states()
             await interaction.response.send_message(embed=confirm_embed, ephemeral=True)
             await interaction.message.edit(embed=embed, view=self)
 
+        except discord.errors.InteractionResponded:
+            logger.warning("Interaction already responded for poll vote")
+        except discord.errors.NotFound:
+            logger.warning("Interaction not found (stale token) for poll vote")
         except Exception as e:
             logger.error(f"Error handling vote: {e}")
             try:
@@ -200,8 +216,8 @@ class PollView(View):
                     "\u26a0\ufe0f An error occurred while processing your vote.",
                     ephemeral=True
                 )
-            except Exception as inner_e:
-                logger.error(f"Failed to send error message: {inner_e}")
+            except Exception:
+                pass
 
     def _make_progress_bar(self, votes: int, total: int, width: int = 10) -> str:
         pct = votes / max(total, 1)
@@ -225,6 +241,19 @@ class PollView(View):
         except Exception as e:
             logger.error(f"Error updating embed fields: {e}")
 
+    def _refresh_button_states(self) -> None:
+        if self.max_votes_per_option is None:
+            return
+        state_changed = False
+        for i, option in enumerate(self.options):
+            if i < len(self.buttons):
+                is_full = self.votes.get(option, 0) >= self.max_votes_per_option
+                if self.buttons[i].disabled != is_full:
+                    self.buttons[i].disabled = is_full
+                    state_changed = True
+        if state_changed:
+            logger.info(f"Button states updated for poll {self.poll_id}")
+
 
 async def send_poll(
     question: str,
@@ -232,6 +261,7 @@ async def send_poll(
     channel_id: Optional[int] = None,
     role_ids: Optional[List[int]] = None,
     max_votes_per_option: Optional[int] = None,
+    description: str = '',
 ) -> bool:
     try:
         target_channel_id = channel_id or CHANNEL_ID
@@ -256,15 +286,17 @@ async def send_poll(
                 return False
 
         if role_ids:
-            mention_str = " ".join(f"<@&{rid}>" for rid in role_ids if rid in available_roles)
-            if mention_str:
+            valid_roles = [rid for rid in role_ids if int(rid) in available_roles]
+            if valid_roles:
+                mention_str = " ".join(f"<@&{rid}>" for rid in valid_roles)
                 await channel.send(mention_str)
 
-        view = PollView(question, options, max_votes_per_option)
+        view = PollView(question, options, max_votes_per_option, description)
 
+        embed_desc = description if description else "Vote by clicking a button below."
         embed = discord.Embed(
             title=f"\U0001f4ca {question}",
-            description="Vote by clicking a button below.",
+            description=embed_desc,
             color=INDIGO
         )
 
@@ -279,6 +311,21 @@ async def send_poll(
         embed.timestamp = datetime.now()
 
         msg = await channel.send(embed=embed, view=view)
+        view.channel_id = channel.id
+        view.message_id = msg.id
+
+        try:
+            excel_manager.add_poll_metadata(
+                poll_id=view.poll_id,
+                question=question,
+                options=options,
+                channel_id=channel.id,
+                message_id=msg.id,
+                description=description
+            )
+        except Exception as e:
+            logger.error(f"Failed to save poll metadata: {e}")
+
         logger.info(f"Poll created - Question: {question}, Options: {len(options)}, Poll ID: {view.poll_id}, Message ID: {msg.id}")
         return True
 
@@ -290,6 +337,67 @@ async def send_poll(
         return False
     except Exception as e:
         logger.error(f"Error sending poll: {e}", exc_info=True)
+        return False
+
+
+async def end_poll_and_send_results(poll_id: int) -> bool:
+    try:
+        poll_state.end_poll(poll_id)
+
+        stats = excel_manager.get_poll_stats(poll_id)
+        if not stats:
+            logger.warning(f"No stats found for poll {poll_id}, sending basic end message")
+            return False
+
+        meta = excel_manager.get_poll_metadata(poll_id)
+        channel_id = meta.get('channel_id') if meta else None
+
+        if not channel_id:
+            logger.warning(f"No channel_id found for poll {poll_id}, cannot send results")
+            return False
+
+        channel = bot.get_channel(channel_id)
+        if not channel:
+            try:
+                channel = await bot.fetch_channel(channel_id)
+            except Exception:
+                logger.error(f"Channel {channel_id} not found for poll results")
+                return False
+
+        question = stats.get('question', 'Unknown Question')
+        choices = stats.get('choices', {})
+        voters_by_choice = stats.get('voters_by_choice', {})
+        total_votes = stats.get('total_votes', 0)
+
+        embed = discord.Embed(
+            title=f"\U0001f4ca Poll Results \u2014 {question}",
+            description="The poll has ended. Here are the final results.",
+            color=INDIGO
+        )
+
+        sorted_choices = sorted(choices.items(), key=lambda x: x[1], reverse=True)
+
+        for choice, count in sorted_choices:
+            voters = voters_by_choice.get(choice, [])
+            voter_text = ", ".join(voters) if voters else "*(no voters)*"
+            pct = int((count / max(total_votes, 1)) * 100)
+            bar_count = int((count / max(total_votes, 1)) * 10)
+            bar = "\u2588\u2588" * bar_count + "\u2591\u2591" * (10 - bar_count)
+            embed.add_field(
+                name=f"{choice} \u2014 {count} votes ({pct}%)",
+                value=f"{bar}\n{voter_text}",
+                inline=False
+            )
+
+        embed.set_footer(text=f"Total Votes: {total_votes} \u2022 BRIDGE 2026 VII")
+        embed.timestamp = datetime.now()
+
+        await channel.send(embed=embed)
+        logger.info(f"Poll results sent to channel {channel_id} for poll {poll_id}")
+        return True
+
+    except Exception as e:
+        logger.error(f"Error sending poll results for {poll_id}: {e}", exc_info=True)
         return False
 
 
