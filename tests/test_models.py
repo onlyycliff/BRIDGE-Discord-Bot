@@ -17,6 +17,9 @@ class TestModelSchema:
         assert "questions" in tables
         assert "options" in tables
         assert "responses" in tables
+        assert "industry_tours" in tables
+        assert "tour_feedback" in tables
+        assert "coaches" in tables
 
     def test_enum_values(self):
         assert list(FormStatus) == [
@@ -26,6 +29,11 @@ class TestModelSchema:
             QuestionType.single_choice,
             QuestionType.multi_choice,
             QuestionType.text,
+        ]
+        from db.enums import PollType
+        assert list(PollType) == [
+            PollType.generic,
+            PollType.workshop_selection,
         ]
 
     def test_foreign_key_columns(self):

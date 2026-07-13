@@ -106,6 +106,7 @@ def create_poll():
         channel_id = data.get('channel_id')
         role_ids = data.get('role_ids')
         max_votes_per_option = data.get('max_votes_per_option')
+        poll_type = data.get('poll_type', 'poll')
 
         question = _sanitize_mentions(question)
         description = _sanitize_mentions(description)
@@ -159,7 +160,8 @@ def create_poll():
         logger.info(f"Scheduling poll: {question} with options: {options}")
         future = asyncio.run_coroutine_threadsafe(
             send_poll(question, options, channel_id=channel_id, role_ids=role_ids,
-                      max_votes_per_option=max_votes_per_option, description=description),
+                      max_votes_per_option=max_votes_per_option, description=description,
+                      poll_type=poll_type),
             loop
         )
 
@@ -562,4 +564,81 @@ def github_profile():
         return jsonify({"error": "GitHub API request failed"}), 502
     except Exception as e:
         logger.error(f"Error in github_profile: {e}")
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
+
+
+@api.route('/tours', methods=['GET'])
+def list_tours():
+    try:
+        from db.repository import get_all_tours
+        tours = _run(get_all_tours())
+        return jsonify(tours), 200
+    except Exception as e:
+        logger.error(f"Error listing tours: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@api.route('/tours/<int:tour_id>/feedback', methods=['GET'])
+def get_tour_feedback_route(tour_id: int):
+    try:
+        from db.repository import get_tour_feedback
+        feedback = _run(get_tour_feedback(tour_id))
+        return jsonify({
+            "tour_id": tour_id,
+            "feedback": feedback,
+            "count": len(feedback),
+        }), 200
+    except Exception as e:
+        logger.error(f"Error getting tour feedback: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@api.route('/feedback/submit', methods=['POST'])
+def submit_feedback():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON data provided"}), 400
+
+        tour_id = data.get('tour_id')
+        student_id = data.get('student_id')
+        student_name = data.get('student_name', '').strip()
+        rating = data.get('rating')
+        comments = data.get('comments', '').strip()
+
+        if not tour_id or not student_id:
+            return jsonify({"error": "tour_id and student_id are required"}), 400
+
+        try:
+            tour_id = int(tour_id)
+        except (ValueError, TypeError):
+            return jsonify({"error": "Invalid tour_id"}), 400
+
+        if rating is not None:
+            try:
+                rating = int(rating)
+                if rating < 1 or rating > 5:
+                    return jsonify({"error": "Rating must be between 1 and 5"}), 400
+            except (ValueError, TypeError):
+                return jsonify({"error": "Invalid rating"}), 400
+
+        from db.repository import submit_tour_feedback
+        fb = _run(submit_tour_feedback(
+            tour_id=tour_id,
+            student_id=int(student_id),
+            student_name=student_name or "Anonymous",
+            rating=rating,
+            comments=comments or None,
+        ))
+
+        return jsonify({
+            "success": True,
+            "message": "Feedback submitted successfully",
+            "feedback_id": fb.id,
+        }), 201
+
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        logger.error(f"Error submitting feedback: {e}", exc_info=True)
         return jsonify({"error": f"Server error: {str(e)}"}), 500

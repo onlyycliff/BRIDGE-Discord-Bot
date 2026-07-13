@@ -11,3 +11,8 @@ class QuestionType(str, enum.Enum):
     single_choice = "single_choice"
     multi_choice = "multi_choice"
     text = "text"
+
+
+class PollType(str, enum.Enum):
+    generic = "generic"
+    workshop_selection = "workshop_selection"

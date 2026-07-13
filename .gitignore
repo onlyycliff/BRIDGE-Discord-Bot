@@ -11,6 +11,12 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage*
+coverage/
 
 # Data files (legacy Excel — kept in gitignore for safety)
 responses.xlsx

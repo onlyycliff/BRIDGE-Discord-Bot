@@ -51,7 +51,9 @@ _root_logger.addHandler(_handler)
 logger = logging.getLogger(__name__)
 
 
-from flask import Flask, render_template, redirect, url_for
+from flask import Flask, render_template, redirect, url_for, request
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from werkzeug.security import check_password_hash
 from dotenv import load_dotenv
 
 from bot import start_bot
@@ -88,6 +90,11 @@ _validate_env()
 # ---------------------------------------------------------------------------
 # Database startup check (runs in a one-shot event loop)
 # ---------------------------------------------------------------------------
+def _run_async(coro):
+    """Run an async coroutine synchronously for Flask route handlers."""
+    return asyncio.run(coro)
+
+
 def _verify_db() -> None:
     """Run the async DB connectivity check synchronously at startup."""
     from db.session import ensure_db
@@ -109,7 +116,37 @@ _verify_db()
 # Flask app
 # ---------------------------------------------------------------------------
 app = Flask(__name__, template_folder='templates', static_folder='static')
+app.secret_key = os.getenv("FLASK_SECRET_KEY", os.urandom(24).hex())
 dashboard = app
+
+# ---------------------------------------------------------------------------
+# Flask-Login setup
+# ---------------------------------------------------------------------------
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = "login"
+
+
+@login_manager.user_loader
+def load_coach(coach_id: str):
+    import asyncio
+    from sqlalchemy import select
+    from db.session import get_factory
+    from db.models import Coach as CoachModel
+    try:
+        factory = get_factory()
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        async def _load():
+            async with factory() as session:
+                stmt = select(CoachModel).where(CoachModel.id == int(coach_id))
+                result = await session.execute(stmt)
+                return result.scalar_one_or_none()
+        coach = loop.run_until_complete(_load())
+        loop.close()
+        return coach
+    except Exception:
+        return None
 
 _bot_started = False
 _bot_thread_lock = threading.Lock()
@@ -164,7 +201,51 @@ atexit.register(_shutdown)
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
+@dashboard.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('home'))
+
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip()
+        password = request.form.get('password', '')
+
+        from db.repository import get_coach_by_email
+        coach = _run_async(get_coach_by_email(email))
+
+        if coach and check_password_hash(coach.password_hash, password):
+            login_user(coach)
+            next_page = request.args.get('next')
+            return redirect(next_page or url_for('home'))
+
+        return render_template('login.html', error="Invalid email or password")
+
+    return render_template('login.html')
+
+
+@dashboard.route('/logout')
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
+
+@dashboard.route('/feedback/<int:tour_id>')
+def feedback_form(tour_id: int):
+    try:
+        from db.repository import get_tour
+        tour = _run_async(get_tour(tour_id))
+
+        if not tour:
+            return "Tour not found", 404
+
+        return render_template('feedback_form.html', tour=tour)
+    except Exception as e:
+        logger.error(f"Error loading feedback form: {e}")
+        return f"Error loading feedback form: {e}", 500
+
+
 @dashboard.route('/')
+@login_required
 def home():
     try:
         return render_template('dashboard.html')
@@ -174,6 +255,7 @@ def home():
 
 
 @dashboard.route('/create-poll')
+@login_required
 def create_poll_redirect():
     return redirect(url_for('home'), 301)
 

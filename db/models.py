@@ -3,6 +3,7 @@ from sqlalchemy import (
     BigInteger, Boolean, Column, DateTime, Enum, ForeignKey,
     Index, Integer, String, Text, text,
 )
+from flask_login import UserMixin
 from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.sql import func
 
@@ -117,3 +118,42 @@ class Response(Base):
             postgresql_where=text("option_id IS NOT NULL"),
         ),
     )
+
+
+class IndustryTour(Base):
+    __tablename__ = "industry_tours"
+
+    id = Column(BigInteger, primary_key=True)
+    name = Column(String(200), nullable=False)
+    date = Column(DateTime(timezone=True), nullable=False)
+    company = Column(String(200), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    feedback = relationship(
+        "TourFeedback", back_populates="tour",
+        cascade="all, delete-orphan", passive_deletes=True,
+    )
+
+
+class TourFeedback(Base):
+    __tablename__ = "tour_feedback"
+
+    id = Column(BigInteger, primary_key=True)
+    tour_id = Column(ForeignKey("industry_tours.id", ondelete="CASCADE"), nullable=False, index=True)
+    student_id = Column(BigInteger, nullable=False, index=True)
+    student_name = Column(String(100), nullable=False, server_default="")
+    rating = Column(Integer, nullable=True)
+    comments = Column(Text, nullable=True)
+    submitted_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    tour = relationship("IndustryTour", back_populates="feedback")
+
+
+class Coach(Base, UserMixin):
+    __tablename__ = "coaches"
+
+    id = Column(BigInteger, primary_key=True)
+    email = Column(String(255), nullable=False, unique=True)
+    password_hash = Column(String(255), nullable=False)
+    name = Column(String(100), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

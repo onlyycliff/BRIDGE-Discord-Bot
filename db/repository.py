@@ -3,8 +3,8 @@ from typing import Dict, List, Optional
 
 from sqlalchemy import and_, select
 
-from db.enums import FormStatus, QuestionType
-from db.models import Form, Option, Question, Response
+from db.enums import FormStatus, PollType, QuestionType
+from db.models import Coach, Form, IndustryTour, Option, Question, Response, TourFeedback
 from db.session import get_session
 
 logger = logging.getLogger(__name__)
@@ -44,6 +44,7 @@ async def add_poll_metadata(
     guild_id: int = 0,
     created_by: int = 0,
     description: str = "",
+    poll_type: str = "poll",
 ) -> Optional[Dict]:
     """Create Form + Question + Options in a single transaction.
 
@@ -54,7 +55,7 @@ async def add_poll_metadata(
             id=poll_id,
             guild_id=guild_id,
             channel_id=channel_id,
-            type="poll",
+            type=poll_type,
             title=description or question,
             created_by=created_by,
             status=FormStatus.active,
@@ -269,3 +270,127 @@ async def end_poll(poll_id: int) -> bool:
         form.status = FormStatus.closed
         logger.info(f"Poll {poll_id} closed (DB)")
         return True
+
+
+# ---------------------------------------------------------------------------
+# Industry Tour Feedback
+# ---------------------------------------------------------------------------
+
+
+async def create_tour(
+    name: str,
+    date,
+    company: str,
+) -> IndustryTour:
+    async with get_session() as session:
+        import time
+        tour = IndustryTour(
+            id=int(time.time() * 1000),
+            name=name,
+            date=date,
+            company=company,
+        )
+        session.add(tour)
+        await session.flush()
+        logger.info(f"Tour created (DB): {name} at {company}")
+        return tour
+
+
+async def get_tour(tour_id: int) -> Optional[IndustryTour]:
+    async with get_session() as session:
+        stmt = select(IndustryTour).where(IndustryTour.id == tour_id)
+        result = await session.execute(stmt)
+        return result.scalar_one_or_none()
+
+
+async def get_all_tours() -> List[Dict]:
+    async with get_session() as session:
+        stmt = select(IndustryTour).order_by(IndustryTour.date.desc())
+        result = await session.execute(stmt)
+        tours = result.scalars().all()
+        return [
+            {
+                "id": t.id,
+                "name": t.name,
+                "date": str(t.date),
+                "company": t.company,
+                "feedback_count": len(t.feedback),
+            }
+            for t in tours
+        ]
+
+
+async def submit_tour_feedback(
+    tour_id: int,
+    student_id: int,
+    student_name: str,
+    rating: Optional[int] = None,
+    comments: Optional[str] = None,
+) -> TourFeedback:
+    async with get_session() as session:
+        tour = await session.get(IndustryTour, tour_id)
+        if not tour:
+            raise ValueError(f"Tour {tour_id} not found")
+
+        fb = TourFeedback(
+            tour_id=tour_id,
+            student_id=student_id,
+            student_name=str(student_name)[:100],
+            rating=rating,
+            comments=comments,
+        )
+        session.add(fb)
+        await session.flush()
+        logger.info(f"Feedback submitted (DB): student={student_name} tour={tour_id}")
+        return fb
+
+
+async def get_tour_feedback(tour_id: int) -> List[Dict]:
+    async with get_session() as session:
+        stmt = (
+            select(TourFeedback)
+            .where(TourFeedback.tour_id == tour_id)
+            .order_by(TourFeedback.submitted_at)
+        )
+        result = await session.execute(stmt)
+        feedback = result.scalars().all()
+        return [
+            {
+                "id": f.id,
+                "student_id": f.student_id,
+                "student_name": f.student_name,
+                "rating": f.rating,
+                "comments": f.comments,
+                "submitted_at": str(f.submitted_at),
+            }
+            for f in feedback
+        ]
+
+
+# ---------------------------------------------------------------------------
+# Coaches
+# ---------------------------------------------------------------------------
+
+
+async def get_coach_by_email(email: str) -> Optional[Coach]:
+    async with get_session() as session:
+        stmt = select(Coach).where(Coach.email == email)
+        result = await session.execute(stmt)
+        return result.scalar_one_or_none()
+
+
+async def create_coach(
+    email: str,
+    password_hash: str,
+    name: str,
+) -> Coach:
+    async with get_session() as session:
+        coach = Coach(
+            email=email,
+            password_hash=password_hash,
+            name=name,
+        )
+        session.add(coach)
+        await session.flush()
+        logger.info(f"Coach created (DB): {email}")
+        return coach

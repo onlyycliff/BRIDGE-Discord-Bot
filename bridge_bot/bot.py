@@ -268,6 +268,7 @@ async def send_poll(
     role_ids: Optional[List[int]] = None,
     max_votes_per_option: Optional[int] = None,
     description: str = '',
+    poll_type: str = "poll",
 ) -> bool:
     try:
         target_channel_id = channel_id or CHANNEL_ID
@@ -330,6 +331,7 @@ async def send_poll(
                 message_id=msg.id,
                 guild_id=guild_id,
                 description=description,
+                poll_type=poll_type,
             )
             if result:
                 view.question_id = result["question_id"]
