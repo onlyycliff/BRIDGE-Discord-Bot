@@ -10,7 +10,7 @@ import logging
 import asyncio
 from pathlib import Path
 from datetime import datetime
-from typing import Optional, Dict, List
+from typing import Optional, Dict
 
 from db.repository import get_all_votes, get_summary_by_question
 

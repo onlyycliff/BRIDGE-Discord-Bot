@@ -14,13 +14,11 @@ What it does:
      checking Form.id already present).
 """
 
-import os
 import sys
 import json
 import asyncio
 import argparse
 from pathlib import Path
-from datetime import datetime
 
 # Ensure project root is on sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -176,7 +174,7 @@ async def migrate(xlsx_path: str) -> None:
                 print(f"  Imported {vote_count} votes...")
 
         await session.commit()
-        print(f"\nMigration complete:")
+        print("\nMigration complete:")
         print(f"  Polls created: {meta_count}")
         print(f"  Votes imported: {vote_count}")
         print(f"  Skipped: {skip_count}")

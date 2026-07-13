@@ -54,7 +54,7 @@ logger = logging.getLogger(__name__)
 from flask import Flask, render_template, redirect, url_for
 from dotenv import load_dotenv
 
-from bot import start_bot, bot
+from bot import start_bot
 from api import api
 
 

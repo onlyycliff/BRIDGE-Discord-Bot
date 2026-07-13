@@ -5,8 +5,7 @@ import asyncio
 import time
 import csv
 import io
-from pathlib import Path
-from typing import List, Dict, Optional
+from typing import Dict
 from datetime import datetime
 
 import requests
@@ -16,7 +15,6 @@ from db.repository import (
     end_poll as db_end_poll,
     get_all_polls,
     get_all_votes,
-    get_poll_metadata,
     get_poll_stats,
     get_summary_by_question,
 )
@@ -310,7 +308,7 @@ def get_votes_paginated():
 @api.route('/bot-status', methods=['GET'])
 def get_bot_status():
     try:
-        from bot import bot, poll_state, start_time
+        from bot import bot, start_time
 
         online = bot is not None and bot.is_ready()
 
@@ -355,7 +353,7 @@ def get_bot_status():
 
 
 @api.route('/polls/stats', methods=['GET'])
-def get_poll_stats():
+def get_poll_stats_route():
     try:
         poll_id = request.args.get('poll_id', type=int)
 
@@ -375,7 +373,7 @@ def get_poll_stats():
 
 
 @api.route('/votes/all', methods=['GET'])
-def get_all_votes():
+def get_every_vote():
     try:
         votes = _run(get_all_votes())
 

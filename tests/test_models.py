@@ -1,7 +1,7 @@
 """Tests for database models — structure, constraints, cascade behaviour."""
 
 import pytest
-from sqlalchemy import inspect, select, text
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
 from db.enums import FormStatus, QuestionType

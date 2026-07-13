@@ -1,9 +1,7 @@
-import json
 import logging
-from datetime import datetime
 from typing import Dict, List, Optional
 
-from sqlalchemy import and_, delete, func, select, text
+from sqlalchemy import and_, select
 
 from db.enums import FormStatus, QuestionType
 from db.models import Form, Option, Question, Response

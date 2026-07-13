@@ -43,7 +43,7 @@ def create_engine_from_url(database_url: str | None = None):
     _async_session_factory = async_sessionmaker(
         _engine, class_=AsyncSession, expire_on_commit=False,
     )
-    logger.info(f"Database engine created (asyncpg)")
+    logger.info("Database engine created (asyncpg)")
     return _engine
 
 
