@@ -577,3 +577,7 @@ def start_bot() -> None:
     logger.info("Starting Bridge Bot...")
     bot.run(token)
 
+
+if __name__ == "__main__":
+    start_bot()
+
