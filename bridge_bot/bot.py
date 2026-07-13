@@ -1,3 +1,7 @@
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import logging
 import time
 import os
@@ -5,6 +9,7 @@ from datetime import datetime
 from typing import Dict, Set, List, Optional
 
 import discord
+from db.enums import QuestionType
 from discord.ext import commands
 from discord.ui import View
 from dotenv import load_dotenv
