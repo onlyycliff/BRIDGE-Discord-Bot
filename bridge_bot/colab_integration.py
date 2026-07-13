@@ -7,10 +7,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import json
 import logging
+import asyncio
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, List
-from excel_manager import excel_manager
+
+from db.repository import get_all_votes, get_summary_by_question
+
+
+def _run(coro):
+    return asyncio.run(coro)
 
 try:
     import gspread
@@ -78,7 +84,7 @@ class ColabIntegration:
                 return False
             
             # Get all votes from Excel
-            votes = excel_manager.get_all_votes()
+            votes = _run(get_all_votes())
             if not votes:
                 logger.warning("No votes to sync")
                 return False
@@ -129,7 +135,7 @@ class ColabIntegration:
                 summary_ws = sheet.add_worksheet(title="Summary", rows=100, cols=5)
             
             # Get summary data
-            summary = excel_manager.get_summary_by_question()
+            summary = _run(get_summary_by_question())
             
             if not summary:
                 logger.warning("No summary data available")
@@ -173,8 +179,8 @@ class ColabIntegration:
             JSON-serializable data structure
         """
         try:
-            all_votes = excel_manager.get_all_votes()
-            summary = excel_manager.get_summary_by_question()
+            all_votes = _run(get_all_votes())
+            summary = _run(get_summary_by_question())
             
             prepared_data = {
                 'timestamp': datetime.now().isoformat(),

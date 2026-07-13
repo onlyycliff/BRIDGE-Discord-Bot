@@ -3,14 +3,28 @@ import re
 import logging
 import asyncio
 import time
+import csv
+import io
 from pathlib import Path
 from typing import List, Dict, Optional
 from datetime import datetime
 
 import requests
 from flask import Blueprint, jsonify, request, send_file
-from excel_manager import excel_manager
 from bot import send_poll, end_poll_and_send_results, poll_state, bot
+from db.repository import (
+    end_poll as db_end_poll,
+    get_all_polls,
+    get_all_votes,
+    get_poll_metadata,
+    get_poll_stats,
+    get_summary_by_question,
+)
+
+
+def _run(coro):
+    """Run an async DB coroutine synchronously for Flask route handlers."""
+    return asyncio.run(coro)
 
 logger = logging.getLogger(__name__)
 
@@ -177,7 +191,7 @@ def create_poll():
 @api.route('/polls', methods=['GET'])
 def list_polls():
     try:
-        polls = excel_manager.get_all_polls()
+        polls = _run(get_all_polls())
         try:
             from bot import poll_state
             for p in polls:
@@ -194,7 +208,7 @@ def list_polls():
 @api.route('/polls/<int:poll_id>', methods=['GET'])
 def get_poll_detail(poll_id: int):
     try:
-        stats = excel_manager.get_poll_stats(poll_id)
+        stats = _run(get_poll_stats(poll_id))
         if not stats:
             return jsonify({"error": "Poll not found"}), 404
 
@@ -227,6 +241,11 @@ def end_poll(poll_id: int):
         if not poll_state.end_poll(poll_id):
             return jsonify({"error": "Poll not found or already ended"}), 404
 
+        try:
+            _run(db_end_poll(poll_id))
+        except Exception as e:
+            logger.error(f"Failed to close poll {poll_id} in DB: {e}")
+
         if send_results:
             try:
                 loop = bot.loop
@@ -249,7 +268,7 @@ def end_poll(poll_id: int):
 @api.route('/votes', methods=['GET'])
 def get_votes_paginated():
     try:
-        votes = excel_manager.get_all_votes()
+        votes = _run(get_all_votes())
         page = request.args.get("page", 1, type=int)
         limit = request.args.get("limit", 25, type=int)
         question_filter = request.args.get("question")
@@ -302,7 +321,7 @@ def get_bot_status():
             minutes, seconds = divmod(remainder, 60)
             uptime_str = f"{hours}h {minutes}m {seconds}s"
 
-        all_votes = excel_manager.get_all_votes()
+        all_votes = _run(get_all_votes())
         total_votes = len(all_votes)
 
         today = datetime.now().strftime("%Y-%m-%d")
@@ -343,7 +362,7 @@ def get_poll_stats():
         if not poll_id:
             return jsonify({"error": "poll_id parameter required"}), 400
 
-        stats = excel_manager.get_poll_stats(poll_id)
+        stats = _run(get_poll_stats(poll_id))
 
         if not stats:
             return jsonify({"error": f"Poll {poll_id} not found"}), 404
@@ -358,7 +377,7 @@ def get_poll_stats():
 @api.route('/votes/all', methods=['GET'])
 def get_all_votes():
     try:
-        votes = excel_manager.get_all_votes()
+        votes = _run(get_all_votes())
 
         question_filter = request.args.get('question')
         username_filter = request.args.get('username')
@@ -386,7 +405,7 @@ def get_all_votes():
 @api.route('/votes/by-user/<int:user_id>', methods=['GET'])
 def get_user_votes(user_id: int):
     try:
-        votes = excel_manager.get_all_votes()
+        votes = _run(get_all_votes())
         user_votes = [v for v in votes if v.get('User_ID') == user_id]
 
         return jsonify({
@@ -403,7 +422,7 @@ def get_user_votes(user_id: int):
 @api.route('/summary', methods=['GET'])
 def get_summary():
     try:
-        summary = excel_manager.get_summary_by_question()
+        summary = _run(get_summary_by_question())
 
         if not summary:
             return jsonify({"summary": {}, "total_questions": 0}), 200
@@ -421,12 +440,32 @@ def get_summary():
 @api.route('/export/csv', methods=['GET'])
 def export_csv():
     try:
-        filepath = excel_manager.export_to_csv()
-
-        if not filepath:
+        votes = _run(get_all_votes())
+        if not votes:
             return jsonify({"error": "No data to export"}), 404
 
-        return send_file(filepath, as_attachment=True, download_name="poll_feedback.csv")
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=[
+            "Timestamp", "Username", "User_ID", "Question", "Choice", "Poll_ID",
+        ])
+        writer.writeheader()
+        for v in votes:
+            writer.writerow({
+                "Timestamp": v.get("Timestamp", ""),
+                "Username": v.get("Username", ""),
+                "User_ID": v.get("User_ID", ""),
+                "Question": v.get("Question", ""),
+                "Choice": v.get("Choice", ""),
+                "Poll_ID": v.get("Poll_ID", ""),
+            })
+
+        output.seek(0)
+        return send_file(
+            io.BytesIO(output.getvalue().encode("utf-8-sig")),
+            as_attachment=True,
+            download_name="poll_feedback.csv",
+            mimetype="text/csv",
+        )
 
     except Exception as e:
         logger.error(f"Error exporting CSV: {e}")
@@ -436,7 +475,7 @@ def export_csv():
 @api.route('/data/status', methods=['GET'])
 def get_data_status():
     try:
-        all_votes = excel_manager.get_all_votes()
+        all_votes = _run(get_all_votes())
         total_records = len(all_votes)
 
         last_timestamp = "N/A"
@@ -445,20 +484,10 @@ def get_data_status():
             if timestamps:
                 last_timestamp = max(timestamps)
 
-        file_size = "N/A"
-        try:
-            fpath = Path(excel_manager.file_path)
-            if fpath.exists():
-                size_kb = fpath.stat().st_size / 1024
-                file_size = f"{size_kb:.1f} KB"
-        except Exception:
-            pass
-
         return jsonify({
             "total_records": total_records,
             "last_timestamp": last_timestamp,
-            "file_size": file_size,
-            "cache_dirty": excel_manager._dirty,
+            "storage": "postgresql",
             "status": "healthy"
         }), 200
     except Exception as e:
@@ -469,8 +498,8 @@ def get_data_status():
 @api.route('/dashboard/overview', methods=['GET'])
 def get_dashboard_overview():
     try:
-        all_votes = excel_manager.get_all_votes()
-        summary = excel_manager.get_summary_by_question()
+        all_votes = _run(get_all_votes())
+        summary = _run(get_summary_by_question())
 
         total_votes = len(all_votes) if all_votes else 0
         unique_voters = len(set(v.get('User_ID') for v in all_votes if v.get('User_ID'))) if all_votes else 0
