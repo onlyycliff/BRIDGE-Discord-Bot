@@ -2,6 +2,7 @@ import logging
 from typing import Dict, List, Optional
 
 from sqlalchemy import and_, select
+from sqlalchemy.orm import selectinload
 
 from db.enums import FormStatus, PollType, QuestionType
 from db.models import Coach, Form, IndustryTour, Option, Question, Response, TourFeedback
@@ -153,7 +154,11 @@ async def get_poll_stats(poll_id: int) -> Optional[Dict]:
         return None
 
     async with get_session() as session:
-        stmt = select(Response).where(Response.question_id == question.id)
+        stmt = (
+            select(Response)
+            .options(selectinload(Response.option))
+            .where(Response.question_id == question.id)
+        )
         result = await session.execute(stmt)
         responses = list(result.scalars().all())
 
@@ -186,7 +191,11 @@ async def get_all_polls() -> List[Dict]:
                 continue
             options = await get_options_by_question_id(question.id)
 
-            resp_stmt = select(Response).where(Response.question_id == question.id)
+            resp_stmt = (
+                select(Response)
+                .options(selectinload(Response.option))
+                .where(Response.question_id == question.id)
+            )
             resp_result = await session.execute(resp_stmt)
             responses = list(resp_result.scalars().all())
 
@@ -215,7 +224,11 @@ async def get_all_polls() -> List[Dict]:
 
 async def get_all_votes() -> List[Dict]:
     async with get_session() as session:
-        stmt = select(Response).order_by(Response.submitted_at)
+        stmt = (
+            select(Response)
+            .options(selectinload(Response.question), selectinload(Response.option))
+            .order_by(Response.submitted_at)
+        )
         result = await session.execute(stmt)
         responses = list(result.scalars().all())
 
@@ -241,7 +254,11 @@ async def get_summary_by_question() -> Dict:
 
         summary = {}
         for q in questions:
-            resp_stmt = select(Response).where(Response.question_id == q.id)
+            resp_stmt = (
+                select(Response)
+                .options(selectinload(Response.option))
+                .where(Response.question_id == q.id)
+            )
             resp_result = await session.execute(resp_stmt)
             responses = list(resp_result.scalars().all())
 
@@ -305,7 +322,11 @@ async def get_tour(tour_id: int) -> Optional[IndustryTour]:
 
 async def get_all_tours() -> List[Dict]:
     async with get_session() as session:
-        stmt = select(IndustryTour).order_by(IndustryTour.date.desc())
+        stmt = (
+            select(IndustryTour)
+            .options(selectinload(IndustryTour.feedback))
+            .order_by(IndustryTour.date.desc())
+        )
         result = await session.execute(stmt)
         tours = result.scalars().all()
         return [
