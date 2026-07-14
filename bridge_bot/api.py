@@ -10,6 +10,7 @@ from datetime import datetime
 
 import requests
 from flask import Blueprint, jsonify, request, send_file
+from flask_login import current_user
 from bridge_bot.adapter import BotAdapter, StubBotAdapter
 from bridge_bot.async_bridge import run_sync as _run
 from db.repository import (
@@ -18,6 +19,7 @@ from db.repository import (
     get_all_votes,
     get_poll_stats,
     get_summary_by_question,
+    get_tour,
 )
 
 
@@ -627,3 +629,68 @@ def submit_feedback():
     except Exception as e:
         logger.error(f"Error submitting feedback: {e}", exc_info=True)
         return jsonify({"error": f"Server error: {str(e)}"}), 500
+
+
+@api.route('/auth/login', methods=['POST'])
+def auth_login():
+    from flask_login import login_user as flask_login_user
+    from flask_login import UserMixin
+    from db.repository import get_coach_by_email
+    from werkzeug.security import check_password_hash
+
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "No JSON data provided"}), 400
+
+    email = data.get("email", "").strip()
+    password = data.get("password", "")
+
+    if not email or not password:
+        return jsonify({"error": "Email and password are required"}), 400
+
+    try:
+        coach = _run(get_coach_by_email(email))
+        if not coach or not check_password_hash(coach.password_hash, password):
+            return jsonify({"error": "Invalid email or password"}), 401
+
+        class CoachUser(UserMixin):
+            def __init__(self, c):
+                self.id = c.id
+                self.name = c.name
+                self.email = c.email
+
+        flask_login_user(CoachUser(coach))
+        return jsonify({
+            "success": True,
+            "user": {"name": coach.name, "email": coach.email},
+        }), 200
+    except Exception as e:
+        logger.error(f"Login error: {e}")
+        return jsonify({"error": "Login failed"}), 500
+
+
+@api.route('/auth/me', methods=['GET'])
+def auth_me():
+    if current_user.is_authenticated:
+        return jsonify({
+            "authenticated": True,
+            "user": {"name": current_user.name, "email": current_user.email},
+        }), 200
+    return jsonify({"authenticated": False}), 401
+
+
+@api.route('/tours/<int:tour_id>', methods=['GET'])
+def get_tour_detail(tour_id: int):
+    try:
+        tour = _run(get_tour(tour_id))
+        if not tour:
+            return jsonify({"error": "Tour not found"}), 404
+        return jsonify({
+            "id": tour.id,
+            "name": tour.name,
+            "company": tour.company,
+            "date": str(tour.date) if tour.date else None,
+        }), 200
+    except Exception as e:
+        logger.error(f"Error getting tour: {e}")
+        return jsonify({"error": str(e)}), 500

@@ -9,15 +9,17 @@ export function WorkshopSchedule() {
       animate={{ opacity: 1 }}
       transition={{ duration: 0.25 }}
     >
-      <h1 className="text-2xl font-bold">Workshop Schedule</h1>
-      <Card>
-        <CardHeader>
-          <CardTitle>Schedule</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">Workshop schedule and overview will render here.</p>
-        </CardContent>
-      </Card>
+      <h1 className="text-2xl font-bold font-display">Workshop Schedule</h1>
+      <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
+        <Card>
+          <CardHeader>
+            <CardTitle>Schedule</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground">Workshop schedule and overview will render here.</p>
+          </CardContent>
+        </Card>
+      </motion.div>
     </motion.div>
   )
 }

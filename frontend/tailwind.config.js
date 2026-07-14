@@ -11,6 +11,11 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        display: ['"Space Grotesk"', '-apple-system', 'sans-serif'],
+        body: ['Outfit', '-apple-system', 'sans-serif'],
+        mono: ['"Space Mono"', 'ui-monospace', 'monospace'],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -21,12 +26,12 @@ export default {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
           violet: {
-            DEFAULT: "#6366F1",
+            DEFAULT: "#818CF8",
             50: "#eef2ff",
             100: "#e0e7ff",
             200: "#c7d2fe",
             300: "#a5b4fc",
-            400: "#818cf8",
+            400: "#818CF8",
             500: "#6366F1",
             600: "#4f46e5",
             700: "#4338ca",
@@ -34,7 +39,7 @@ export default {
             900: "#312e81",
           },
           emerald: {
-            DEFAULT: "#22C55E",
+            DEFAULT: "#34D399",
             50: "#ecfdf5",
             100: "#d1fae5",
             200: "#a7f3d0",

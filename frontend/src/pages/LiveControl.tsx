@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { motion } from "framer-motion"
+import { AnimatePresence, motion } from "framer-motion"
 import { api } from "@/api/client"
 import type { Poll, DiscordChannel, DiscordRole, CreatePollPayload } from "@/api/types"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -168,7 +168,7 @@ export function LiveControl() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Live Control</h1>
+        <h1 className="text-2xl font-bold font-display">Live Control</h1>
         <Button variant="outline" size="sm" onClick={() => { fetchData(); fetchPolls() }}>
           <RefreshCw className="mr-2 h-4 w-4" />
           Refresh
@@ -324,30 +324,32 @@ export function LiveControl() {
               <p className="text-sm text-muted-foreground">No active polls.</p>
             )}
             {pollsState.status === "loaded" && (
-              <motion.div className="space-y-3" layout>
-                {pollsState.polls.map((poll, idx) => (
-                  <motion.div
-                    key={poll.poll_id}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.2, delay: idx * 0.05 }}
-                    layout
-                  >
-                    <div
-                      className="rounded-lg border p-3 hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-colors"
-                      tabIndex={0}
+              <AnimatePresence mode="popLayout">
+                <motion.div className="space-y-3" layout>
+                  {pollsState.polls.map((poll) => (
+                    <motion.div
+                      key={poll.poll_id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -8 }}
+                      layout
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="text-sm font-medium leading-snug">{poll.question}</p>
-                        <Badge variant="success">Live</Badge>
+                      <div
+                        className="rounded-lg border p-3 hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-colors"
+                        tabIndex={0}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm font-medium leading-snug">{poll.question}</p>
+                          <Badge variant="success">Live</Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {poll.total_votes} vote{poll.total_votes !== 1 ? "s" : ""}
+                        </p>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {poll.total_votes} vote{poll.total_votes !== 1 ? "s" : ""}
-                      </p>
-                    </div>
-                  </motion.div>
-                ))}
-              </motion.div>
+                    </motion.div>
+                  ))}
+                </motion.div>
+              </AnimatePresence>
             )}
           </CardContent>
         </Card>

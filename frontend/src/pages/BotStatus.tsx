@@ -79,7 +79,7 @@ export function BotStatus() {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Bot Status</h1>
+          <h1 className="text-2xl font-bold font-display">Bot Status</h1>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <StatSkeleton />
@@ -94,7 +94,7 @@ export function BotStatus() {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Bot Status</h1>
+          <h1 className="text-2xl font-bold font-display">Bot Status</h1>
         </div>
         <Card>
           <CardContent className="flex flex-col items-center gap-4 py-12">

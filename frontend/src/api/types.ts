@@ -83,3 +83,23 @@ export interface CreatePollPayload {
   role_ids?: number[]
   max_votes_per_option?: number | null
 }
+
+export interface AuthUser {
+  name: string
+  email: string
+}
+
+export interface Tour {
+  id: number
+  name: string
+  company: string
+  date: string | null
+}
+
+export interface FeedbackSubmitPayload {
+  tour_id: number
+  student_name: string
+  student_id: number
+  rating: number | null
+  comments: string | null
+}

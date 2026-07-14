@@ -1,51 +1,20 @@
-import React, { useCallback, useEffect, useState } from "react"
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
+import { AuthProvider, useAuth } from "@/hooks/use-auth"
+import { ThemeProvider } from "@/hooks/use-theme"
+import { ProtectedRoute } from "@/components/ProtectedRoute"
 import { Layout } from "@/components/layout/Layout"
+import { ErrorBoundary } from "@/components/ErrorBoundary"
+import { Login } from "@/pages/Login"
+import { FeedbackForm } from "@/pages/FeedbackForm"
 import { PollResults } from "@/pages/PollResults"
 import { VoteLog } from "@/pages/VoteLog"
 import { BotStatus } from "@/pages/BotStatus"
 import { WorkshopSchedule } from "@/pages/WorkshopSchedule"
 import { LiveControl } from "@/pages/LiveControl"
-import { useTheme } from "@/hooks/use-theme"
 
-type Page = "polls" | "votes" | "bot-status" | "schedule" | "live-control"
-
-const VALID_PAGES: Page[] = ["polls", "votes", "bot-status", "schedule", "live-control"]
-
-function getPageFromURL(): Page {
-  const hash = window.location.hash.replace("#/", "").replace("#", "")
-  if (VALID_PAGES.includes(hash as Page)) return hash as Page
-  return "polls"
-}
-
-const pageComponents: Record<Page, () => React.ReactElement> = {
-  polls: PollResults,
-  votes: VoteLog,
-  "bot-status": BotStatus,
-  schedule: WorkshopSchedule,
-  "live-control": LiveControl,
-}
-
-export default function App() {
-  useTheme()
-  const [activePage, setActivePage] = useState<Page>(getPageFromURL)
+function AnimatedPage({ children }: { children: React.ReactNode }) {
   const prefersReduced = useReducedMotion()
-
-  const handleNavigate = useCallback((page: Page) => {
-    setActivePage(page)
-    window.location.hash = `/${page}`
-  }, [])
-
-  useEffect(() => {
-    function onHashChange() {
-      setActivePage(getPageFromURL())
-    }
-    window.addEventListener("hashchange", onHashChange)
-    return () => window.removeEventListener("hashchange", onHashChange)
-  }, [])
-
-  const PageComponent = pageComponents[activePage]
-
   const variants = prefersReduced
     ? { initial: {}, animate: {}, exit: {} }
     : {
@@ -55,19 +24,74 @@ export default function App() {
       }
 
   return (
-    <Layout activePath={`/${activePage}`} onNavigate={(path) => handleNavigate(path.slice(1) as Page)}>
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={activePage}
-          variants={variants}
-          initial="initial"
-          animate="animate"
-          exit="exit"
-          transition={{ duration: 0.2 }}
-        >
-          <PageComponent />
-        </motion.div>
-      </AnimatePresence>
+    <AnimatePresence mode="wait">
+      <motion.div
+        variants={variants}
+        initial="initial"
+        animate="animate"
+        exit="exit"
+        transition={{ duration: 0.2 }}
+      >
+        {children}
+      </motion.div>
+    </AnimatePresence>
+  )
+}
+
+function DashboardRoutes() {
+  return (
+    <Layout>
+      <ErrorBoundary>
+        <AnimatedPage>
+          <Routes>
+            <Route path="/polls" element={<PollResults />} />
+            <Route path="/votes" element={<VoteLog />} />
+            <Route path="/bot-status" element={<BotStatus />} />
+            <Route path="/schedule" element={<WorkshopSchedule />} />
+            <Route path="/live-control" element={<LiveControl />} />
+            <Route path="*" element={<Navigate to="/polls" replace />} />
+          </Routes>
+        </AnimatedPage>
+      </ErrorBoundary>
     </Layout>
+  )
+}
+
+function AppRoutes() {
+  const { isLoading } = useAuth()
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    )
+  }
+
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route path="/feedback/:tourId" element={<FeedbackForm />} />
+      <Route
+        path="/*"
+        element={
+          <ProtectedRoute>
+            <DashboardRoutes />
+          </ProtectedRoute>
+        }
+      />
+    </Routes>
+  )
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </AuthProvider>
+    </ThemeProvider>
   )
 }

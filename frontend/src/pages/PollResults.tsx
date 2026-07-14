@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from "react"
+import React, { useCallback, useEffect, useState } from "react"
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from "recharts"
-import { motion } from "framer-motion"
+import { AnimatePresence, motion } from "framer-motion"
 import { api } from "@/api/client"
 import type { Poll } from "@/api/types"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -18,13 +18,13 @@ type State =
   | { status: "error"; message: string }
   | { status: "loaded"; polls: Poll[] }
 
-const COLORS = ["#6366F1", "#22C55E", "#EC4899", "#F59E0B", "#06B6D4"]
+const COLORS = ["#818CF8", "#34D399", "#F472B6", "#FBBF24", "#22D3EE"]
 
 function chartColor(index: number): string {
   return COLORS[index % COLORS.length]
 }
 
-function PollCard({ poll }: { poll: Poll }) {
+const PollCard = React.memo(function PollCard({ poll }: { poll: Poll }) {
   const totalVotes = poll.options.reduce((s, o) => s + o.votes, 0)
   const data = poll.options.map((o) => ({ name: o.name, votes: o.votes }))
 
@@ -33,6 +33,9 @@ function PollCard({ poll }: { poll: Poll }) {
       layout
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      whileHover={{ scale: 1.01 }}
+      whileTap={{ scale: 0.99 }}
       transition={{ duration: 0.25 }}
     >
       <Card className="overflow-hidden">
@@ -79,7 +82,7 @@ function PollCard({ poll }: { poll: Poll }) {
       </Card>
     </motion.div>
   )
-}
+})
 
 function PollSkeleton() {
   return (
@@ -120,7 +123,7 @@ export function PollResults() {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Poll Results</h1>
+          <h1 className="text-2xl font-bold font-display">Poll Results</h1>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           <PollSkeleton />
@@ -134,7 +137,7 @@ export function PollResults() {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Poll Results</h1>
+          <h1 className="text-2xl font-bold font-display">Poll Results</h1>
         </div>
         <Card>
           <CardContent className="flex flex-col items-center gap-4 py-12">
@@ -154,7 +157,7 @@ export function PollResults() {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Poll Results</h1>
+          <h1 className="text-2xl font-bold font-display">Poll Results</h1>
         </div>
         <Card>
           <CardContent className="flex flex-col items-center gap-4 py-12">
@@ -177,17 +180,19 @@ export function PollResults() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Poll Results</h1>
+        <h1 className="text-2xl font-bold font-display">Poll Results</h1>
         <Button variant="outline" size="sm" onClick={() => fetchPolls()}>
           <RefreshCw className="mr-2 h-4 w-4" />
           Refresh
         </Button>
       </div>
-      <motion.div className="grid gap-4 md:grid-cols-2" layout>
-        {polls.map((poll) => (
-          <PollCard key={poll.poll_id} poll={poll} />
-        ))}
-      </motion.div>
+      <AnimatePresence mode="popLayout">
+        <motion.div className="grid gap-4 md:grid-cols-2" layout>
+          {polls.map((poll) => (
+            <PollCard key={poll.poll_id} poll={poll} />
+          ))}
+        </motion.div>
+      </AnimatePresence>
     </div>
   )
 }

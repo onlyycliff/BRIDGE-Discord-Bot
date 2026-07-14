@@ -107,7 +107,7 @@ export function VoteLog() {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Vote Log</h1>
+          <h1 className="text-2xl font-bold font-display">Vote Log</h1>
         </div>
         <TableSkeleton />
       </div>
@@ -118,7 +118,7 @@ export function VoteLog() {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Vote Log</h1>
+          <h1 className="text-2xl font-bold font-display">Vote Log</h1>
         </div>
         <Card>
           <CardContent className="flex flex-col items-center gap-4 py-12">
@@ -138,7 +138,7 @@ export function VoteLog() {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Vote Log</h1>
+          <h1 className="text-2xl font-bold font-display">Vote Log</h1>
         </div>
         <Card>
           <CardContent className="flex flex-col items-center gap-4 py-12">

@@ -46,9 +46,8 @@ _root_logger.addHandler(_handler)
 logger = logging.getLogger(__name__)
 
 
-from flask import Flask, render_template, redirect, url_for, request
-from flask_login import LoginManager, login_user, logout_user, login_required, current_user, UserMixin
-from werkzeug.security import check_password_hash
+from flask import Flask, render_template, redirect, request
+from flask_login import LoginManager, logout_user, current_user, UserMixin
 from dotenv import load_dotenv
 
 from bridge_bot.bot import start_bot
@@ -218,50 +217,34 @@ atexit.register(_shutdown)
 @dashboard.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for('home'))
-
-    if request.method == 'POST':
-        email = request.form.get('email', '').strip()
-        password = request.form.get('password', '')
-
-        from db.repository import get_coach_by_email
-        from bridge_bot.async_bridge import run_sync
-        coach = run_sync(get_coach_by_email(email))
-
-        if coach and check_password_hash(coach.password_hash, password):
-            login_user(CoachUser(coach))
-            next_page = request.args.get('next')
-            return redirect(next_page or url_for('home'))
-
-        return render_template('login.html', error="Invalid email or password")
-
-    return render_template('login.html')
+        return redirect('/')
+    try:
+        from flask import send_from_directory
+        if os.path.isdir(_REACT_DIST):
+            return send_from_directory(_REACT_DIST, 'index.html')
+    except Exception as e:
+        logger.error(f"Error loading login: {e}")
+    return "Frontend not built", 500
 
 
 @dashboard.route('/logout')
 def logout():
     logout_user()
-    return redirect(url_for('login'))
+    return redirect('/login')
 
 
 @dashboard.route('/feedback/<int:tour_id>')
 def feedback_form(tour_id: int):
     try:
-        from db.repository import get_tour
-        from bridge_bot.async_bridge import run_sync
-        tour = run_sync(get_tour(tour_id))
-
-        if not tour:
-            return "Tour not found", 404
-
-        return render_template('feedback_form.html', tour=tour)
+        from flask import send_from_directory
+        if os.path.isdir(_REACT_DIST):
+            return send_from_directory(_REACT_DIST, 'index.html')
     except Exception as e:
         logger.error(f"Error loading feedback form: {e}")
-        return f"Error loading feedback form: {e}", 500
+    return "Frontend not built", 500
 
 
 @dashboard.route('/')
-@login_required
 def home():
     try:
         from flask import send_from_directory
@@ -291,9 +274,20 @@ def react_favicon():
 
 
 @dashboard.route('/create-poll')
-@login_required
 def create_poll_redirect():
-    return redirect(url_for('home'), 301)
+    return redirect('/', 301)
+
+
+@dashboard.route('/<path:path>')
+def catch_all(path):
+    from flask import send_from_directory
+    import mimetypes
+    file_path = os.path.join(_REACT_DIST, path)
+    if os.path.isfile(file_path):
+        return send_from_directory(_REACT_DIST, path)
+    if os.path.isdir(_REACT_DIST):
+        return send_from_directory(_REACT_DIST, 'index.html')
+    return "Frontend not built", 500
 
 
 @dashboard.errorhandler(404)
