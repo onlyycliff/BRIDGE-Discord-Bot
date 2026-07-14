@@ -22,14 +22,16 @@ export function NavBar({ activePath, onNavigate }: NavBarProps) {
           <span className="text-primary-violet-500">Bridge</span>
           <span className="text-primary-emerald-500"> 2026</span>
         </div>
-        <nav className="flex items-center gap-1 flex-1 overflow-x-auto">
+        <nav aria-label="Main navigation" className="flex items-center gap-1 flex-1 overflow-x-auto">
           {navItems.map((item) => {
             const Icon = item.icon
             const isActive = activePath === item.path
             return (
-              <button
+              <a
                 key={item.path}
-                onClick={() => onNavigate(item.path)}
+                href={`#${item.path}`}
+                aria-current={isActive ? "page" : undefined}
+                onClick={(e) => { e.preventDefault(); onNavigate(item.path) }}
                 className={`inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
                   ${isActive
                     ? "bg-primary/10 text-primary"
@@ -38,7 +40,7 @@ export function NavBar({ activePath, onNavigate }: NavBarProps) {
               >
                 <Icon className="h-4 w-4" />
                 {item.label}
-              </button>
+              </a>
             )
           })}
         </nav>

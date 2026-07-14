@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useCallback, useEffect, useState } from "react"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import { Layout } from "@/components/layout/Layout"
 import { PollResults } from "@/pages/PollResults"
@@ -10,6 +10,14 @@ import { useTheme } from "@/hooks/use-theme"
 
 type Page = "polls" | "votes" | "bot-status" | "schedule" | "live-control"
 
+const VALID_PAGES: Page[] = ["polls", "votes", "bot-status", "schedule", "live-control"]
+
+function getPageFromURL(): Page {
+  const hash = window.location.hash.replace("#/", "").replace("#", "")
+  if (VALID_PAGES.includes(hash as Page)) return hash as Page
+  return "polls"
+}
+
 const pageComponents: Record<Page, () => React.ReactElement> = {
   polls: PollResults,
   votes: VoteLog,
@@ -20,8 +28,21 @@ const pageComponents: Record<Page, () => React.ReactElement> = {
 
 export default function App() {
   useTheme()
-  const [activePage, setActivePage] = useState<Page>("polls")
+  const [activePage, setActivePage] = useState<Page>(getPageFromURL)
   const prefersReduced = useReducedMotion()
+
+  const handleNavigate = useCallback((page: Page) => {
+    setActivePage(page)
+    window.location.hash = `/${page}`
+  }, [])
+
+  useEffect(() => {
+    function onHashChange() {
+      setActivePage(getPageFromURL())
+    }
+    window.addEventListener("hashchange", onHashChange)
+    return () => window.removeEventListener("hashchange", onHashChange)
+  }, [])
 
   const PageComponent = pageComponents[activePage]
 
@@ -34,7 +55,7 @@ export default function App() {
       }
 
   return (
-    <Layout activePath={`/${activePage}`} onNavigate={(path) => setActivePage(path.slice(1) as Page)}>
+    <Layout activePath={`/${activePage}`} onNavigate={(path) => handleNavigate(path.slice(1) as Page)}>
       <AnimatePresence mode="wait">
         <motion.div
           key={activePage}

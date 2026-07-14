@@ -56,6 +56,12 @@
   body {
     @apply bg-background text-foreground;
   }
+  html {
+    color-scheme: dark;
+  }
+  html.light {
+    color-scheme: light;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

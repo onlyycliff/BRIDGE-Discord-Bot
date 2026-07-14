@@ -9,8 +9,11 @@ interface LayoutProps {
 export function Layout({ children, activePath, onNavigate }: PropsWithChildren<LayoutProps>) {
   return (
     <div className="min-h-screen flex flex-col">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-[9999] focus:p-4 focus:bg-background focus:text-foreground">
+        Skip to main content
+      </a>
       <NavBar activePath={activePath} onNavigate={onNavigate} />
-      <main className="flex-1 p-4 md:p-6">
+      <main id="main-content" className="flex-1 p-4 md:p-6">
         <div className="mx-auto max-w-7xl">
           {children}
         </div>

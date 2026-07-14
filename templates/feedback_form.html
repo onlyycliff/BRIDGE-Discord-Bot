@@ -49,14 +49,15 @@
       color: var(--color-text);
       font-size: var(--text-sm);
       margin-bottom: var(--space-md);
-      outline: none;
-      transition: border-color 0.2s;
+      transition: border-color 0.2s, box-shadow 0.2s;
       box-sizing: border-box;
       font-family: inherit;
     }
     .feedback-card input:focus,
     .feedback-card textarea:focus {
       border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px var(--color-primary-muted);
+      outline: none;
     }
     .feedback-card textarea {
       min-height: 100px;
@@ -69,7 +70,15 @@
       direction: rtl;
     }
     .star-rating input {
-      display: none;
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
     }
     .star-rating label {
       font-size: 2rem;
@@ -111,6 +120,14 @@
     .hidden {
       display: none;
     }
+    .error-msg {
+      background: var(--color-offline-muted);
+      color: var(--color-offline);
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: var(--text-xs);
+      margin-bottom: var(--space-md);
+    }
     .feedback-footer {
       text-align: center;
       margin-top: var(--space-lg);
@@ -135,12 +152,14 @@
       &#10003; Thank you! Your feedback has been submitted.
     </div>
 
+    <div id="error-msg" class="error-msg hidden" role="alert" aria-live="polite"></div>
+
     <form id="feedback-form">
       <label for="student_name" class="required">Your Name</label>
-      <input type="text" id="student_name" name="student_name" placeholder="Enter your name" required>
+      <input type="text" id="student_name" name="student_name" placeholder="Enter your name…" autocomplete="name" required>
 
       <label for="student_id" class="required">Student ID</label>
-      <input type="number" id="student_id" name="student_id" placeholder="Discord user ID" required>
+      <input type="number" id="student_id" name="student_id" placeholder="Discord user ID" autocomplete="off" required>
 
       <label>Rating</label>
       <div class="star-rating">
@@ -159,7 +178,7 @@
       <label for="comments">Comments</label>
       <textarea id="comments" name="comments" placeholder="What did you think of the tour? Any suggestions?"></textarea>
 
-      <button type="submit" class="btn">Submit Feedback</button>
+      <button type="submit" class="btn" id="submit-btn">Submit Feedback</button>
     </form>
 
     <div class="feedback-footer">
@@ -172,6 +191,20 @@
       e.preventDefault();
 
       const form = e.target;
+      const submitBtn = document.getElementById('submit-btn');
+      const errorMsg = document.getElementById('error-msg');
+      const successMsg = document.getElementById('success-msg');
+
+      function showError(msg) {
+        errorMsg.textContent = msg;
+        errorMsg.classList.remove('hidden');
+        successMsg.classList.add('hidden');
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting…';
+      errorMsg.classList.add('hidden');
+
       const data = {
         tour_id: {{ tour.id }},
         student_name: form.student_name.value.trim(),
@@ -189,13 +222,17 @@
         const json = await res.json();
 
         if (res.ok && json.success) {
-          document.getElementById('success-msg').classList.remove('hidden');
+          successMsg.classList.remove('hidden');
           form.classList.add('hidden');
         } else {
-          alert(json.error || 'Failed to submit feedback');
+          showError(json.error || 'Failed to submit feedback. Please try again.');
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Submit Feedback';
         }
       } catch (err) {
-        alert('Network error. Please try again.');
+        showError('Network error. Please check your connection and try again.');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Feedback';
       }
     });
   </script>

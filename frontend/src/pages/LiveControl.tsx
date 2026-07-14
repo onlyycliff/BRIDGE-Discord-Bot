@@ -184,8 +184,9 @@ export function LiveControl() {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="text-sm font-medium mb-1 block">Question *</label>
+                <label htmlFor="poll-question" className="text-sm font-medium mb-1 block">Question *</label>
                 <Input
+                  id="poll-question"
                   value={form.question}
                   onChange={(e) => setForm((f) => ({ ...f, question: e.target.value }))}
                   placeholder="Poll question"
@@ -194,8 +195,9 @@ export function LiveControl() {
               </div>
 
               <div>
-                <label className="text-sm font-medium mb-1 block">Description</label>
+                <label htmlFor="poll-description" className="text-sm font-medium mb-1 block">Description</label>
                 <textarea
+                  id="poll-description"
                   value={form.description}
                   onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                   placeholder="Description shown on the Discord embed (optional)"
@@ -205,8 +207,9 @@ export function LiveControl() {
               </div>
 
               <div>
-                <label className="text-sm font-medium mb-1 block">Channel</label>
+                <label htmlFor="poll-channel" className="text-sm font-medium mb-1 block">Channel</label>
                 <select
+                  id="poll-channel"
                   value={form.channelId}
                   onChange={(e) => setForm((f) => ({ ...f, channelId: e.target.value }))}
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
@@ -231,7 +234,7 @@ export function LiveControl() {
                         className="flex-1"
                       />
                       {form.options.length > 2 && (
-                        <Button type="button" variant="ghost" size="icon" onClick={() => removeOption(idx)}>
+                        <Button type="button" variant="ghost" size="icon" aria-label={`Remove option ${idx + 1}`} onClick={() => removeOption(idx)}>
                           <X className="h-4 w-4" />
                         </Button>
                       )}
@@ -252,25 +255,28 @@ export function LiveControl() {
                   <label className="text-sm font-medium mb-1 block">Role Mentions</label>
                   <div className="flex flex-wrap gap-2">
                     {roles.map((role) => (
-                      <Badge
+                      <button
                         key={role.id}
-                        variant={form.roleIds.includes(Number(role.id)) ? "default" : "outline"}
-                        className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                        tabIndex={0}
-                        role="button"
+                        type="button"
+                        aria-pressed={form.roleIds.includes(Number(role.id))}
                         onClick={() => toggleRole(Number(role.id))}
-                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleRole(Number(role.id)) } }}
+                        className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
+                          ${form.roleIds.includes(Number(role.id))
+                            ? "border-transparent bg-primary text-primary-foreground shadow"
+                            : "text-foreground"
+                          }`}
                       >
                         @{role.name}
-                      </Badge>
+                      </button>
                     ))}
                   </div>
                 </div>
               )}
 
               <div>
-                <label className="text-sm font-medium mb-1 block">Max Votes Per Option</label>
+                <label htmlFor="poll-max-votes" className="text-sm font-medium mb-1 block">Max Votes Per Option</label>
                 <Input
+                  id="poll-max-votes"
                   type="number"
                   value={form.maxVotes}
                   onChange={(e) => setForm((f) => ({ ...f, maxVotes: e.target.value }))}
@@ -298,7 +304,7 @@ export function LiveControl() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Active Polls</CardTitle>
-              <Button variant="ghost" size="sm" onClick={() => fetchPolls()}>
+              <Button variant="ghost" size="sm" aria-label="Refresh polls" onClick={() => fetchPolls()}>
                 <RefreshCw className="h-4 w-4" />
               </Button>
             </div>

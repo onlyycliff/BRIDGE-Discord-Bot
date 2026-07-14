@@ -169,9 +169,11 @@ export function VoteLog() {
       </div>
 
       <div className="flex gap-2">
+        <label htmlFor="vote-search" className="sr-only">Search by username</label>
         <Input
+          id="vote-search"
           ref={searchRef}
-          placeholder="Search by username..."
+          placeholder="Search by username…"
           defaultValue={search}
           onKeyDown={(e) => e.key === "Enter" && handleSearch()}
           className="max-w-xs"
@@ -224,6 +226,7 @@ export function VoteLog() {
             variant="outline"
             size="sm"
             disabled={page <= 1}
+            aria-label="Previous page"
             onClick={() => setPage((p) => Math.max(1, p - 1))}
           >
             <ChevronLeft className="h-4 w-4" />
@@ -233,6 +236,7 @@ export function VoteLog() {
             variant="outline"
             size="sm"
             disabled={page >= data.total_pages}
+            aria-label="Next page"
             onClick={() => setPage((p) => p + 1)}
           >
             Next
