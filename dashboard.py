@@ -7,15 +7,10 @@ import os
 import sys
 import json
 import logging
-import asyncio
 import atexit
 import threading
 from pathlib import Path
 from datetime import datetime, timezone
-
-_BRIDGE_BOT_DIR = str(Path(__file__).resolve().parent / 'bridge_bot')
-if _BRIDGE_BOT_DIR not in sys.path:
-    sys.path.insert(0, _BRIDGE_BOT_DIR)
 
 
 # ---------------------------------------------------------------------------
@@ -52,12 +47,26 @@ logger = logging.getLogger(__name__)
 
 
 from flask import Flask, render_template, redirect, url_for, request
-from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user, UserMixin
 from werkzeug.security import check_password_hash
 from dotenv import load_dotenv
 
-from bot import start_bot
-from api import api
+from bridge_bot.bot import start_bot
+from bridge_bot.api import api
+
+
+class CoachUser(UserMixin):
+    """Thin adapter — adds Flask-Login behavior to a Coach model instance.
+
+    The model layer stays pure (no Flask dependency). This adapter lives
+    in the web layer where it belongs.
+    """
+    def __init__(self, coach):
+        self.id = coach.id
+        self.email = coach.email
+        self.name = coach.name
+        self.password_hash = coach.password_hash
+        self.created_at = coach.created_at
 
 
 # ---------------------------------------------------------------------------
@@ -88,25 +97,17 @@ _validate_env()
 
 
 # ---------------------------------------------------------------------------
-# Database startup check (runs in a one-shot event loop)
+# Database startup check
 # ---------------------------------------------------------------------------
-def _run_async(coro):
-    """Run an async coroutine synchronously for Flask route handlers."""
-    return asyncio.run(coro)
-
-
 def _verify_db() -> None:
     """Run the async DB connectivity check synchronously at startup."""
     from db.session import ensure_db
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    from bridge_bot.async_bridge import run_sync
     try:
-        loop.run_until_complete(ensure_db(timeout=15.0))
+        run_sync(ensure_db(timeout=15.0))
     except RuntimeError as e:
         logger.error(str(e))
         raise SystemExit(1) from e
-    finally:
-        loop.close()
 
 
 _verify_db()
@@ -119,6 +120,12 @@ app = Flask(__name__, template_folder='templates', static_folder='static')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", os.urandom(24).hex())
 dashboard = app
 
+_REACT_DIST = str(Path(__file__).resolve().parent / 'frontend' / 'dist')
+if os.path.isdir(_REACT_DIST):
+    app.register_static = True
+else:
+    app.register_static = False
+
 # ---------------------------------------------------------------------------
 # Flask-Login setup
 # ---------------------------------------------------------------------------
@@ -129,22 +136,21 @@ login_manager.login_view = "login"
 
 @login_manager.user_loader
 def load_coach(coach_id: str):
-    import asyncio
     from sqlalchemy import select
     from db.session import get_factory
     from db.models import Coach as CoachModel
+    from bridge_bot.async_bridge import run_sync
     try:
         factory = get_factory()
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
         async def _load():
             async with factory() as session:
                 stmt = select(CoachModel).where(CoachModel.id == int(coach_id))
                 result = await session.execute(stmt)
                 return result.scalar_one_or_none()
-        coach = loop.run_until_complete(_load())
-        loop.close()
-        return coach
+        coach = run_sync(_load())
+        if coach is None:
+            return None
+        return CoachUser(coach)
     except Exception:
         return None
 
@@ -172,6 +178,10 @@ def _ensure_bot_started():
         thread.start()
         logger.info("Bot thread auto-started")
 
+        from bridge_bot.adapter import RealBotAdapter
+        from bridge_bot.api import set_bot_adapter
+        set_bot_adapter(RealBotAdapter())
+
 
 _ensure_bot_started()
 
@@ -184,14 +194,18 @@ dashboard.register_blueprint(api)
 def _shutdown():
     logger.info("Shutting down — disposing database engine")
     from db.session import dispose_engine
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    from bridge_bot.async_bridge import run_sync, shutdown as bridge_shutdown
     try:
-        loop.run_until_complete(dispose_engine())
+        run_sync(dispose_engine())
     except Exception as e:
         logger.error(f"Error during DB shutdown: {e}")
-    finally:
-        loop.close()
+    import asyncio
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            loop.run_until_complete(bridge_shutdown())
+    except Exception:
+        pass
     logger.info("Shutdown complete")
 
 
@@ -211,10 +225,11 @@ def login():
         password = request.form.get('password', '')
 
         from db.repository import get_coach_by_email
-        coach = _run_async(get_coach_by_email(email))
+        from bridge_bot.async_bridge import run_sync
+        coach = run_sync(get_coach_by_email(email))
 
         if coach and check_password_hash(coach.password_hash, password):
-            login_user(coach)
+            login_user(CoachUser(coach))
             next_page = request.args.get('next')
             return redirect(next_page or url_for('home'))
 
@@ -233,7 +248,8 @@ def logout():
 def feedback_form(tour_id: int):
     try:
         from db.repository import get_tour
-        tour = _run_async(get_tour(tour_id))
+        from bridge_bot.async_bridge import run_sync
+        tour = run_sync(get_tour(tour_id))
 
         if not tour:
             return "Tour not found", 404
@@ -248,10 +264,30 @@ def feedback_form(tour_id: int):
 @login_required
 def home():
     try:
+        from flask import send_from_directory
+        if os.path.isdir(_REACT_DIST):
+            return send_from_directory(_REACT_DIST, 'index.html')
         return render_template('dashboard.html')
     except Exception as e:
         logger.error(f"Error loading dashboard: {e}")
         return f"Error loading dashboard: {e}", 500
+
+
+@dashboard.route('/assets/<path:filename>')
+def react_assets(filename):
+    from flask import send_from_directory
+    assets_dir = os.path.join(_REACT_DIST, 'assets')
+    if os.path.isfile(os.path.join(assets_dir, filename)):
+        return send_from_directory(assets_dir, filename)
+    return "Not found", 404
+
+
+@dashboard.route('/favicon.svg')
+def react_favicon():
+    from flask import send_from_directory
+    if os.path.isfile(os.path.join(_REACT_DIST, 'favicon.svg')):
+        return send_from_directory(_REACT_DIST, 'favicon.svg')
+    return "Not found", 404
 
 
 @dashboard.route('/create-poll')

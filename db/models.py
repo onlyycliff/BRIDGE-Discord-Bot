@@ -3,7 +3,6 @@ from sqlalchemy import (
     BigInteger, Boolean, Column, DateTime, Enum, ForeignKey,
     Index, Integer, String, Text, text,
 )
-from flask_login import UserMixin
 from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.sql import func
 
@@ -149,7 +148,7 @@ class TourFeedback(Base):
     tour = relationship("IndustryTour", back_populates="feedback")
 
 
-class Coach(Base, UserMixin):
+class Coach(Base):
     __tablename__ = "coaches"
 
     id = Column(BigInteger, primary_key=True)

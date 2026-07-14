@@ -1,7 +1,3 @@
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
 import logging
 import time
 import os
@@ -14,7 +10,6 @@ from discord.ext import commands
 from discord.ui import View
 from dotenv import load_dotenv
 
-from db.enums import QuestionType
 from db.repository import (
     add_vote as db_add_vote,
     add_poll_metadata,

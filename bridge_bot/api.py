@@ -10,7 +10,8 @@ from datetime import datetime
 
 import requests
 from flask import Blueprint, jsonify, request, send_file
-from bot import send_poll, end_poll_and_send_results, poll_state, bot
+from bridge_bot.adapter import BotAdapter, StubBotAdapter
+from bridge_bot.async_bridge import run_sync as _run
 from db.repository import (
     end_poll as db_end_poll,
     get_all_polls,
@@ -20,13 +21,17 @@ from db.repository import (
 )
 
 
-def _run(coro):
-    """Run an async DB coroutine synchronously for Flask route handlers."""
-    return asyncio.run(coro)
-
 logger = logging.getLogger(__name__)
 
 api = Blueprint('api', __name__, url_prefix='/api')
+
+_bot_adapter: BotAdapter = StubBotAdapter()
+
+
+def set_bot_adapter(adapter: BotAdapter) -> None:
+    """Called by dashboard.py after the bot thread starts."""
+    global _bot_adapter
+    _bot_adapter = adapter
 
 MENTION_PATTERN = re.compile(r'@(everyone|here)', re.IGNORECASE)
 
@@ -59,13 +64,7 @@ def health_check():
 @api.route('/discord/channels', methods=['GET'])
 def list_channels():
     try:
-        from bot import available_channels, bot
-        channels = [{"id": str(cid), "name": name} for cid, name in available_channels.items()]
-        if not channels and bot.is_ready():
-            for guild in bot.guilds:
-                for ch in guild.text_channels:
-                    channels.append({"id": str(ch.id), "name": ch.name})
-        channels.sort(key=lambda c: c["name"])
+        channels = _bot_adapter.list_channels()
         return jsonify(channels), 200
     except Exception as e:
         logger.error(f"Error listing channels: {e}")
@@ -75,14 +74,7 @@ def list_channels():
 @api.route('/discord/roles', methods=['GET'])
 def list_roles():
     try:
-        from bot import available_roles, bot
-        roles = [{"id": str(rid), "name": name} for rid, name in available_roles.items()]
-        if not roles and bot.is_ready():
-            for guild in bot.guilds:
-                for r in guild.roles:
-                    if not r.is_default():
-                        roles.append({"id": str(r.id), "name": r.name})
-        roles.sort(key=lambda r: r["name"])
+        roles = _bot_adapter.list_roles()
         return jsonify(roles), 200
     except Exception as e:
         logger.error(f"Error listing roles: {e}")
@@ -148,21 +140,22 @@ def create_poll():
             if max_votes_per_option < 1:
                 return jsonify({"error": "max_votes_per_option must be at least 1"}), 400
 
-        if not bot or not bot.is_ready():
+        if not _bot_adapter.is_bot_ready():
             logger.warning("Bot not ready for poll creation")
             return jsonify({"error": "Bot not connected to Discord"}), 503
 
-        loop = bot.loop
+        loop = _bot_adapter.get_event_loop()
         if not loop or loop.is_closed():
             logger.error("Event loop not available or closed")
             return jsonify({"error": "Bot event loop unavailable"}), 503
 
         logger.info(f"Scheduling poll: {question} with options: {options}")
-        future = asyncio.run_coroutine_threadsafe(
-            send_poll(question, options, channel_id=channel_id, role_ids=role_ids,
-                      max_votes_per_option=max_votes_per_option, description=description,
-                      poll_type=poll_type),
-            loop
+        future = _bot_adapter.schedule_coroutine(
+            _bot_adapter.send_poll(
+                question, options, channel_id=channel_id, role_ids=role_ids,
+                max_votes_per_option=max_votes_per_option, description=description,
+                poll_type=poll_type,
+            )
         )
 
         try:
@@ -192,13 +185,8 @@ def create_poll():
 def list_polls():
     try:
         polls = _run(get_all_polls())
-        try:
-            from bot import poll_state
-            for p in polls:
-                p['active'] = poll_state.is_active(p.get('poll_id'))
-        except Exception:
-            for p in polls:
-                p['active'] = False
+        for p in polls:
+            p['active'] = _bot_adapter.is_poll_active(p.get('poll_id'))
         return jsonify(polls), 200
     except Exception as e:
         logger.error(f"Error listing polls: {e}", exc_info=True)
@@ -212,7 +200,7 @@ def get_poll_detail(poll_id: int):
         if not stats:
             return jsonify({"error": "Poll not found"}), 404
 
-        is_active = poll_state.is_active(poll_id)
+        is_active = _bot_adapter.is_poll_active(poll_id)
 
         options_list = [
             {"name": choice, "votes": count}
@@ -238,7 +226,7 @@ def end_poll(poll_id: int):
         data = request.get_json(silent=True) or {}
         send_results = data.get('send_results', False)
 
-        if not poll_state.end_poll(poll_id):
+        if not _bot_adapter.end_poll_in_state(poll_id):
             return jsonify({"error": "Poll not found or already ended"}), 404
 
         try:
@@ -248,12 +236,10 @@ def end_poll(poll_id: int):
 
         if send_results:
             try:
-                loop = bot.loop
-                if loop and not loop.is_closed():
-                    asyncio.run_coroutine_threadsafe(
-                        end_poll_and_send_results(poll_id),
-                        loop
-                    )
+                future = _bot_adapter.schedule_coroutine(
+                    _bot_adapter.end_poll_and_send_results(poll_id)
+                )
+                if future is not None:
                     logger.info(f"Scheduled results message for poll {poll_id}")
             except Exception as e:
                 logger.error(f"Failed to schedule results for poll {poll_id}: {e}")
@@ -310,11 +296,10 @@ def get_votes_paginated():
 @api.route('/bot-status', methods=['GET'])
 def get_bot_status():
     try:
-        from bot import bot, start_time
-
-        online = bot is not None and bot.is_ready()
+        online = _bot_adapter.is_bot_ready()
 
         uptime_str = "N/A"
+        start_time = _bot_adapter.get_bot_start_time()
         if online and start_time:
             elapsed = datetime.now() - start_time
             hours, remainder = divmod(int(elapsed.total_seconds()), 3600)
@@ -330,7 +315,7 @@ def get_bot_status():
             if str(v.get("Timestamp", "")).startswith(today)
         )
 
-        avatar_url = str(bot.user.avatar.url) if online and bot.user and bot.user.avatar else ""
+        avatar_url = _bot_adapter.get_bot_avatar_url()
 
         return jsonify({
             "online": online,
@@ -338,7 +323,7 @@ def get_bot_status():
             "votes_total": total_votes,
             "votes_today": votes_today,
             "last_command": "N/A",
-            "latency_ms": round(bot.latency * 1000, 1) if online and hasattr(bot, "latency") else 0,
+            "latency_ms": _bot_adapter.get_bot_latency_ms(),
             "avatar_url": avatar_url
         }), 200
     except Exception as e:

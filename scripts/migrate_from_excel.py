@@ -14,14 +14,10 @@ What it does:
      checking Form.id already present).
 """
 
-import sys
 import json
 import asyncio
 import argparse
 from pathlib import Path
-
-# Ensure project root is on sys.path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dotenv import load_dotenv
 import pandas as pd

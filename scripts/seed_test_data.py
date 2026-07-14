@@ -12,11 +12,8 @@ What it does:
   3. Prints summary of seeded data
 """
 
-import sys
 import asyncio
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash
