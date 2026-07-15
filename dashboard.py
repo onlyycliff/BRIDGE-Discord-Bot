@@ -47,25 +47,12 @@ logger = logging.getLogger(__name__)
 
 
 from flask import Flask, render_template, redirect, request
-from flask_login import LoginManager, logout_user, current_user, UserMixin
+from flask_login import LoginManager, logout_user, current_user
 from dotenv import load_dotenv
 
 from bridge_bot.bot import start_bot
 from bridge_bot.api import api
-
-
-class CoachUser(UserMixin):
-    """Thin adapter — adds Flask-Login behavior to a Coach model instance.
-
-    The model layer stays pure (no Flask dependency). This adapter lives
-    in the web layer where it belongs.
-    """
-    def __init__(self, coach):
-        self.id = coach.id
-        self.email = coach.email
-        self.name = coach.name
-        self.password_hash = coach.password_hash
-        self.created_at = coach.created_at
+from bridge_bot.auth import CoachUser
 
 
 # ---------------------------------------------------------------------------
@@ -116,11 +103,16 @@ _verify_db()
 # Flask app
 # ---------------------------------------------------------------------------
 app = Flask(__name__, template_folder='templates', static_folder='static')
-app.secret_key = os.getenv("FLASK_SECRET_KEY", os.urandom(24).hex())
+_secret_key = os.getenv("FLASK_SECRET_KEY")
+if not _secret_key:
+    if os.getenv("FLASK_ENV") == "production":
+        logger.error("FLASK_SECRET_KEY is not set — sessions will be invalid on every restart. Set it in your environment.")
+    _secret_key = os.urandom(24).hex()
+app.secret_key = _secret_key
 dashboard = app
 
 from flask_cors import CORS
-CORS(app, origins=[os.getenv("FRONTEND_URL", "http://localhost:5173")])
+CORS(app, origins=[os.getenv("FRONTEND_URL", "http://localhost:5173")], supports_credentials=True)
 
 _REACT_DIST = str(Path(__file__).resolve().parent / 'frontend' / 'dist')
 if os.path.isdir(_REACT_DIST):

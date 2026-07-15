@@ -4,7 +4,7 @@ from typing import Dict, List, Optional
 from sqlalchemy import and_, select
 from sqlalchemy.orm import selectinload
 
-from db.enums import FormStatus, PollType, QuestionType
+from db.enums import FormStatus, QuestionType
 from db.models import Coach, Form, IndustryTour, Option, Question, Response, TourFeedback
 from db.session import get_session
 
@@ -180,30 +180,32 @@ async def get_poll_stats(poll_id: int) -> Optional[Dict]:
 
 async def get_all_polls() -> List[Dict]:
     async with get_session() as session:
-        stmt = select(Form).order_by(Form.id.desc())
+        stmt = (
+            select(Form)
+            .options(
+                selectinload(Form.questions)
+                .selectinload(Question.options)
+                .selectinload(Option.responses)
+                .selectinload(Response.option)
+            )
+            .order_by(Form.id.desc())
+        )
         result = await session.execute(stmt)
-        forms = list(result.scalars().all())
+        forms = list(result.scalars().unique().all())
 
         polls = []
         for form in forms:
-            question = await get_question_by_form_id(form.id)
-            if not question:
+            if not form.questions:
                 continue
-            options = await get_options_by_question_id(question.id)
 
-            resp_stmt = (
-                select(Response)
-                .options(selectinload(Response.option))
-                .where(Response.question_id == question.id)
-            )
-            resp_result = await session.execute(resp_stmt)
-            responses = list(resp_result.scalars().all())
+            question = form.questions[0]
+            options = question.options
 
             option_counts: Dict[str, int] = {}
-            for r in responses:
-                if r.option:
-                    option_counts[r.option.text] = (
-                        option_counts.get(r.option.text, 0) + 1
+            for resp in question.responses:
+                if resp.option:
+                    option_counts[resp.option.text] = (
+                        option_counts.get(resp.option.text, 0) + 1
                     )
 
             options_list = [
@@ -248,29 +250,27 @@ async def get_all_votes() -> List[Dict]:
 
 async def get_summary_by_question() -> Dict:
     async with get_session() as session:
-        stmt = select(Question)
+        stmt = (
+            select(Question)
+            .options(
+                selectinload(Question.responses)
+                .selectinload(Response.option)
+            )
+        )
         result = await session.execute(stmt)
-        questions = list(result.scalars().all())
+        questions = list(result.scalars().unique().all())
 
         summary = {}
         for q in questions:
-            resp_stmt = (
-                select(Response)
-                .options(selectinload(Response.option))
-                .where(Response.question_id == q.id)
-            )
-            resp_result = await session.execute(resp_stmt)
-            responses = list(resp_result.scalars().all())
-
             choice_counts: Dict[str, int] = {}
-            for r in responses:
+            for r in q.responses:
                 if r.option:
                     choice_counts[r.option.text] = (
                         choice_counts.get(r.option.text, 0) + 1
                     )
 
             summary[q.prompt] = {
-                "Total_Votes": len(responses),
+                "Total_Votes": len(q.responses),
                 "choices": choice_counts,
             }
 
@@ -415,3 +415,40 @@ async def create_coach(
         await session.flush()
         logger.info(f"Coach created (DB): {email}")
         return coach
+
+
+# ---------------------------------------------------------------------------
+# Poll state DB checks (used as fallback when in-memory state is stale)
+# ---------------------------------------------------------------------------
+
+
+async def is_poll_active_in_db(poll_id: int) -> bool:
+    """Check if a poll is still active in the database."""
+    form = await get_form_by_poll_id(poll_id)
+    return form is not None and form.status == FormStatus.active
+
+
+async def has_user_voted_in_db(poll_id: int, user_id: int) -> bool:
+    """Check if a user has already voted in a poll (via the DB)."""
+    async with get_session() as session:
+        stmt = (
+            select(Response.id)
+            .join(Question, Response.question_id == Question.id)
+            .where(
+                and_(
+                    Question.form_id == poll_id,
+                    Response.user_id == user_id,
+                )
+            )
+            .limit(1)
+        )
+        result = await session.execute(stmt)
+        return result.scalar_one_or_none() is not None
+
+
+async def get_active_poll_ids() -> set:
+    """Return the set of poll IDs with Form.status == active."""
+    async with get_session() as session:
+        stmt = select(Form.id).where(Form.status == FormStatus.active)
+        result = await session.execute(stmt)
+        return set(result.scalars().all())

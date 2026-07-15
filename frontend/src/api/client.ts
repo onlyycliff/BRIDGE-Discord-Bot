@@ -1,5 +1,9 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000"
 
+if (!API_BASE && import.meta.env.PROD) {
+  console.error("VITE_API_BASE_URL is not set — API calls will fail")
+}
+
 export interface ApiError {
   error: string
 }
@@ -14,7 +18,7 @@ async function handleResponse<T>(resp: Response): Promise<T> {
 
 export const api = {
   get: <T>(path: string, signal?: AbortSignal): Promise<T> =>
-    fetch(`${API_BASE}${path}`, { signal }).then(handleResponse<T>),
+    fetch(`${API_BASE}${path}`, { signal, credentials: "include" }).then(handleResponse<T>),
 
   post: <T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> =>
     fetch(`${API_BASE}${path}`, {
@@ -22,5 +26,6 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
       signal,
+      credentials: "include",
     }).then(handleResponse<T>),
 }
