@@ -119,6 +119,9 @@ app = Flask(__name__, template_folder='templates', static_folder='static')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", os.urandom(24).hex())
 dashboard = app
 
+from flask_cors import CORS
+CORS(app, origins=[os.getenv("FRONTEND_URL", "http://localhost:5173")])
+
 _REACT_DIST = str(Path(__file__).resolve().parent / 'frontend' / 'dist')
 if os.path.isdir(_REACT_DIST):
     app.register_static = True
