@@ -1,15 +1,20 @@
-import logging
-from typing import Dict, List, Optional
+"""Repository — backward-compatible facade.
 
-from sqlalchemy import and_, select
-from sqlalchemy.orm import selectinload
+All functions here delegate to the domain-specific repository classes.
+New code should import from ``db.poll_repository``, ``db.tour_repository``,
+or ``db.coach_repository`` directly and inject an ``AsyncSession``.
+"""
 
-from db.enums import FormStatus, QuestionType
-from db.models import Coach, Form, IndustryTour, Option, Question, Response, TourFeedback
+from typing import Dict, List, Optional, Set
+
+from db.enums import QuestionType
+from db.models import Coach, Form, IndustryTour, TourFeedback
 from db.session import get_session
 
-logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Poll functions
+# ---------------------------------------------------------------------------
 
 async def add_vote(
     username: str,
@@ -19,21 +24,13 @@ async def add_vote(
     question_type: QuestionType,
     text_answer: Optional[str] = None,
 ) -> bool:
+    from db.poll_repository import PollRepository
     async with get_session() as session:
-        resp = Response(
-            user_id=user_id,
-            username=str(username)[:100],
-            question_id=question_id,
-            option_id=option_id,
+        return await PollRepository(session).add_vote(
+            username=username, user_id=user_id, question_id=question_id,
+            option_id=option_id, question_type=question_type,
             text_answer=text_answer,
-            question_type=question_type,
         )
-        session.add(resp)
-        logger.info(
-            f"Vote recorded (DB): user={username} ({user_id}) "
-            f"question={question_id} option={option_id}"
-        )
-        return True
 
 
 async def add_poll_metadata(
@@ -47,408 +44,145 @@ async def add_poll_metadata(
     description: str = "",
     poll_type: str = "poll",
 ) -> Optional[Dict]:
-    """Create Form + Question + Options in a single transaction.
-
-    Returns dict with {question_id, option_map} on success, None on failure.
-    """
+    from db.poll_repository import PollRepository
     async with get_session() as session:
-        form = Form(
-            id=poll_id,
-            guild_id=guild_id,
-            channel_id=channel_id,
-            type=poll_type,
-            title=description or question,
-            created_by=created_by,
-            status=FormStatus.active,
-            anonymous=False,
+        return await PollRepository(session).add_poll_metadata(
+            poll_id=poll_id, question=question, options=options,
+            channel_id=channel_id, message_id=message_id,
+            guild_id=guild_id, created_by=created_by,
+            description=description, poll_type=poll_type,
         )
-        session.add(form)
-        await session.flush()
-
-        q = Question(
-            form_id=form.id,
-            prompt=question,
-            question_type=QuestionType.single_choice,
-            order=0,
-        )
-        session.add(q)
-        await session.flush()
-
-        option_map: Dict[str, int] = {}
-        for i, opt_text in enumerate(options):
-            opt = Option(
-                question_id=q.id,
-                text=str(opt_text)[:500],
-                order=i,
-            )
-            session.add(opt)
-            await session.flush()
-            option_map[opt_text] = opt.id
-
-        logger.info(f"Poll metadata saved (DB): poll_id={poll_id}, question={question}")
-        return {"question_id": q.id, "option_map": option_map}
 
 
-async def get_form_by_poll_id(poll_id: int) -> Optional[Form]:
+async def get_form_by_poll_id(poll_id: int):
+    from db.poll_repository import PollRepository
     async with get_session() as session:
-        stmt = select(Form).where(Form.id == poll_id)
-        result = await session.execute(stmt)
-        return result.scalar_one_or_none()
+        return await PollRepository(session).get_form_by_poll_id(poll_id)
 
 
-async def get_question_by_form_id(form_id: int) -> Optional[Question]:
+async def get_question_by_form_id(form_id: int):
+    from db.poll_repository import PollRepository
     async with get_session() as session:
-        stmt = select(Question).where(Question.form_id == form_id)
-        result = await session.execute(stmt)
-        return result.scalar_one_or_none()
+        return await PollRepository(session).get_question_by_form_id(form_id)
 
 
-async def get_options_by_question_id(question_id: int) -> List[Option]:
+async def get_options_by_question_id(question_id: int):
+    from db.poll_repository import PollRepository
     async with get_session() as session:
-        stmt = (
-            select(Option)
-            .where(Option.question_id == question_id)
-            .order_by(Option.order)
-        )
-        result = await session.execute(stmt)
-        return list(result.scalars().all())
+        return await PollRepository(session).get_options_by_question_id(question_id)
 
 
-async def get_option_by_question_and_text(
-    question_id: int, text: str
-) -> Optional[Option]:
+async def get_option_by_question_and_text(question_id: int, text: str):
+    from db.poll_repository import PollRepository
     async with get_session() as session:
-        stmt = select(Option).where(
-            and_(Option.question_id == question_id, Option.text == text)
-        )
-        result = await session.execute(stmt)
-        return result.scalar_one_or_none()
+        return await PollRepository(session).get_option_by_question_and_text(question_id, text)
 
 
 async def get_poll_metadata(poll_id: int) -> Optional[Dict]:
-    form = await get_form_by_poll_id(poll_id)
-    if not form:
-        return None
-    question = await get_question_by_form_id(form.id)
-    if not question:
-        return None
-    options = await get_options_by_question_id(question.id)
-    return {
-        "poll_id": form.id,
-        "question": question.prompt,
-        "description": form.title,
-        "options": [o.text for o in options],
-        "channel_id": form.channel_id,
-        "message_id": None,
-        "timestamp": str(form.created_at),
-    }
+    from db.poll_repository import PollRepository
+    async with get_session() as session:
+        return await PollRepository(session).get_poll_metadata(poll_id)
 
 
 async def get_poll_stats(poll_id: int) -> Optional[Dict]:
-    form = await get_form_by_poll_id(poll_id)
-    if not form:
-        return None
-
-    question = await get_question_by_form_id(form.id)
-    if not question:
-        return None
-
+    from db.poll_repository import PollRepository
     async with get_session() as session:
-        stmt = (
-            select(Response)
-            .options(selectinload(Response.option))
-            .where(Response.question_id == question.id)
-        )
-        result = await session.execute(stmt)
-        responses = list(result.scalars().all())
-
-        choices: Dict[str, int] = {}
-        voters_by_choice: Dict[str, List[str]] = {}
-        for resp in responses:
-            if resp.option:
-                choice = resp.option.text
-                choices[choice] = choices.get(choice, 0) + 1
-                voters_by_choice.setdefault(choice, []).append(resp.username)
-
-        return {
-            "total_votes": len(responses),
-            "question": question.prompt,
-            "choices": choices,
-            "voters_by_choice": voters_by_choice,
-        }
+        return await PollRepository(session).get_poll_stats(poll_id)
 
 
 async def get_all_polls() -> List[Dict]:
+    from db.poll_repository import PollRepository
     async with get_session() as session:
-        stmt = (
-            select(Form)
-            .options(
-                selectinload(Form.questions)
-                .selectinload(Question.options)
-                .selectinload(Option.responses)
-                .selectinload(Response.option)
-            )
-            .order_by(Form.id.desc())
-        )
-        result = await session.execute(stmt)
-        forms = list(result.scalars().unique().all())
-
-        polls = []
-        for form in forms:
-            if not form.questions:
-                continue
-
-            question = form.questions[0]
-            options = question.options
-
-            option_counts: Dict[str, int] = {}
-            for resp in question.responses:
-                if resp.option:
-                    option_counts[resp.option.text] = (
-                        option_counts.get(resp.option.text, 0) + 1
-                    )
-
-            options_list = [
-                {"name": o.text, "votes": option_counts.get(o.text, 0)}
-                for o in options
-            ]
-
-            polls.append({
-                "poll_id": form.id,
-                "question": question.prompt,
-                "options": options_list,
-                "total_votes": sum(option_counts.values()),
-                "timestamp": str(form.created_at),
-            })
-
-        return polls
+        return await PollRepository(session).get_all_polls()
 
 
 async def get_all_votes() -> List[Dict]:
+    from db.poll_repository import PollRepository
     async with get_session() as session:
-        stmt = (
-            select(Response)
-            .options(selectinload(Response.question), selectinload(Response.option))
-            .order_by(Response.submitted_at)
-        )
-        result = await session.execute(stmt)
-        responses = list(result.scalars().all())
-
-        votes = []
-        for r in responses:
-            q = r.question
-            votes.append({
-                "Timestamp": str(r.submitted_at),
-                "Username": r.username,
-                "User_ID": r.user_id,
-                "Question": q.prompt if q else "",
-                "Choice": r.option.text if r.option else "",
-                "Poll_ID": q.form_id if q else "",
-            })
-        return votes
+        return await PollRepository(session).get_all_votes()
 
 
 async def get_summary_by_question() -> Dict:
+    from db.poll_repository import PollRepository
     async with get_session() as session:
-        stmt = (
-            select(Question)
-            .options(
-                selectinload(Question.responses)
-                .selectinload(Response.option)
-            )
-        )
-        result = await session.execute(stmt)
-        questions = list(result.scalars().unique().all())
-
-        summary = {}
-        for q in questions:
-            choice_counts: Dict[str, int] = {}
-            for r in q.responses:
-                if r.option:
-                    choice_counts[r.option.text] = (
-                        choice_counts.get(r.option.text, 0) + 1
-                    )
-
-            summary[q.prompt] = {
-                "Total_Votes": len(q.responses),
-                "choices": choice_counts,
-            }
-
-        return summary
+        return await PollRepository(session).get_summary_by_question()
 
 
 async def end_poll(poll_id: int) -> bool:
+    from db.poll_repository import PollRepository
     async with get_session() as session:
-        stmt = select(Form).where(Form.id == poll_id)
-        result = await session.execute(stmt)
-        form = result.scalar_one_or_none()
-        if not form:
-            return False
-        form.status = FormStatus.closed
-        logger.info(f"Poll {poll_id} closed (DB)")
-        return True
-
-
-# ---------------------------------------------------------------------------
-# Industry Tour Feedback
-# ---------------------------------------------------------------------------
-
-
-async def create_tour(
-    name: str,
-    date,
-    company: str,
-) -> IndustryTour:
-    async with get_session() as session:
-        import time
-        tour = IndustryTour(
-            id=int(time.time() * 1000),
-            name=name,
-            date=date,
-            company=company,
-        )
-        session.add(tour)
-        await session.flush()
-        logger.info(f"Tour created (DB): {name} at {company}")
-        return tour
-
-
-async def get_tour(tour_id: int) -> Optional[IndustryTour]:
-    async with get_session() as session:
-        stmt = select(IndustryTour).where(IndustryTour.id == tour_id)
-        result = await session.execute(stmt)
-        return result.scalar_one_or_none()
-
-
-async def get_all_tours() -> List[Dict]:
-    async with get_session() as session:
-        stmt = (
-            select(IndustryTour)
-            .options(selectinload(IndustryTour.feedback))
-            .order_by(IndustryTour.date.desc())
-        )
-        result = await session.execute(stmt)
-        tours = result.scalars().all()
-        return [
-            {
-                "id": t.id,
-                "name": t.name,
-                "date": str(t.date),
-                "company": t.company,
-                "feedback_count": len(t.feedback),
-            }
-            for t in tours
-        ]
-
-
-async def submit_tour_feedback(
-    tour_id: int,
-    student_id: int,
-    student_name: str,
-    rating: Optional[int] = None,
-    comments: Optional[str] = None,
-) -> TourFeedback:
-    async with get_session() as session:
-        tour = await session.get(IndustryTour, tour_id)
-        if not tour:
-            raise ValueError(f"Tour {tour_id} not found")
-
-        fb = TourFeedback(
-            tour_id=tour_id,
-            student_id=student_id,
-            student_name=str(student_name)[:100],
-            rating=rating,
-            comments=comments,
-        )
-        session.add(fb)
-        await session.flush()
-        logger.info(f"Feedback submitted (DB): student={student_name} tour={tour_id}")
-        return fb
-
-
-async def get_tour_feedback(tour_id: int) -> List[Dict]:
-    async with get_session() as session:
-        stmt = (
-            select(TourFeedback)
-            .where(TourFeedback.tour_id == tour_id)
-            .order_by(TourFeedback.submitted_at)
-        )
-        result = await session.execute(stmt)
-        feedback = result.scalars().all()
-        return [
-            {
-                "id": f.id,
-                "student_id": f.student_id,
-                "student_name": f.student_name,
-                "rating": f.rating,
-                "comments": f.comments,
-                "submitted_at": str(f.submitted_at),
-            }
-            for f in feedback
-        ]
-
-
-# ---------------------------------------------------------------------------
-# Coaches
-# ---------------------------------------------------------------------------
-
-
-async def get_coach_by_email(email: str) -> Optional[Coach]:
-    async with get_session() as session:
-        stmt = select(Coach).where(Coach.email == email)
-        result = await session.execute(stmt)
-        return result.scalar_one_or_none()
-
-
-async def create_coach(
-    email: str,
-    password_hash: str,
-    name: str,
-) -> Coach:
-    async with get_session() as session:
-        coach = Coach(
-            email=email,
-            password_hash=password_hash,
-            name=name,
-        )
-        session.add(coach)
-        await session.flush()
-        logger.info(f"Coach created (DB): {email}")
-        return coach
-
-
-# ---------------------------------------------------------------------------
-# Poll state DB checks (used as fallback when in-memory state is stale)
-# ---------------------------------------------------------------------------
+        return await PollRepository(session).end_poll(poll_id)
 
 
 async def is_poll_active_in_db(poll_id: int) -> bool:
-    """Check if a poll is still active in the database."""
-    form = await get_form_by_poll_id(poll_id)
-    return form is not None and form.status == FormStatus.active
+    from db.poll_repository import PollRepository
+    async with get_session() as session:
+        return await PollRepository(session).is_poll_active_in_db(poll_id)
 
 
 async def has_user_voted_in_db(poll_id: int, user_id: int) -> bool:
-    """Check if a user has already voted in a poll (via the DB)."""
+    from db.poll_repository import PollRepository
     async with get_session() as session:
-        stmt = (
-            select(Response.id)
-            .join(Question, Response.question_id == Question.id)
-            .where(
-                and_(
-                    Question.form_id == poll_id,
-                    Response.user_id == user_id,
-                )
-            )
-            .limit(1)
+        return await PollRepository(session).has_user_voted_in_db(poll_id, user_id)
+
+
+async def get_active_poll_ids() -> Set[int]:
+    from db.poll_repository import PollRepository
+    async with get_session() as session:
+        return await PollRepository(session).get_active_poll_ids()
+
+
+# ---------------------------------------------------------------------------
+# Tour functions
+# ---------------------------------------------------------------------------
+
+async def create_tour(name: str, date, company: str) -> IndustryTour:
+    from db.tour_repository import TourRepository
+    async with get_session() as session:
+        return await TourRepository(session).create_tour(name, date, company)
+
+
+async def get_tour(tour_id: int):
+    from db.tour_repository import TourRepository
+    async with get_session() as session:
+        return await TourRepository(session).get_tour(tour_id)
+
+
+async def get_all_tours() -> List[Dict]:
+    from db.tour_repository import TourRepository
+    async with get_session() as session:
+        return await TourRepository(session).get_all_tours()
+
+
+async def submit_tour_feedback(
+    tour_id: int, student_id: int, student_name: str,
+    rating: Optional[int] = None, comments: Optional[str] = None,
+) -> TourFeedback:
+    from db.tour_repository import TourRepository
+    async with get_session() as session:
+        return await TourRepository(session).submit_tour_feedback(
+            tour_id=tour_id, student_id=student_id,
+            student_name=student_name, rating=rating, comments=comments,
         )
-        result = await session.execute(stmt)
-        return result.scalar_one_or_none() is not None
 
 
-async def get_active_poll_ids() -> set:
-    """Return the set of poll IDs with Form.status == active."""
+async def get_tour_feedback(tour_id: int) -> List[Dict]:
+    from db.tour_repository import TourRepository
     async with get_session() as session:
-        stmt = select(Form.id).where(Form.status == FormStatus.active)
-        result = await session.execute(stmt)
-        return set(result.scalars().all())
+        return await TourRepository(session).get_tour_feedback(tour_id)
+
+
+# ---------------------------------------------------------------------------
+# Coach functions
+# ---------------------------------------------------------------------------
+
+async def get_coach_by_email(email: str):
+    from db.coach_repository import CoachRepository
+    async with get_session() as session:
+        return await CoachRepository(session).get_coach_by_email(email)
+
+
+async def create_coach(email: str, password_hash: str, name: str) -> Coach:
+    from db.coach_repository import CoachRepository
+    async with get_session() as session:
+        return await CoachRepository(session).create_coach(email, password_hash, name)

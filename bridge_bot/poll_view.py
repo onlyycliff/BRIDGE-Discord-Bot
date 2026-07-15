@@ -1,17 +1,26 @@
 import logging
 import time
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 import discord
 from discord.ui import View
 
 from bridge_bot.poll_state import poll_state
 from db.enums import QuestionType
-from db.repository import add_vote as db_add_vote
+
+if TYPE_CHECKING:
+    from bridge_bot.adapter import BotAdapter
 
 logger = logging.getLogger(__name__)
 
 INDIGO = 0x6366F1
+
+_adapter: Optional["BotAdapter"] = None
+
+
+def set_adapter(adapter: "BotAdapter") -> None:
+    global _adapter
+    _adapter = adapter
 
 
 class PollView(View):
@@ -100,14 +109,16 @@ class PollView(View):
             self._update_embed_fields(embed)
 
             try:
-                opt_id = self.option_map.get(choice)
-                await db_add_vote(
-                    username=user_name,
-                    user_id=user_id,
-                    question_id=self.question_id,
-                    option_id=opt_id,
-                    question_type=QuestionType.single_choice,
-                )
+                if _adapter is not None:
+                    opt_id = self.option_map.get(choice)
+                    _adapter.record_vote(
+                        poll_id=self.poll_id,
+                        user_id=user_id,
+                        username=user_name,
+                        question_id=self.question_id,
+                        option_id=opt_id,
+                        question_type=QuestionType.single_choice,
+                    )
             except Exception as e:
                 logger.error(f"Failed to log vote to DB: {e}")
 

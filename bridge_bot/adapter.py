@@ -79,18 +79,34 @@ class BotAdapter(ABC):
         """Return the bot's event loop, or None."""
         ...
 
+    @abstractmethod
+    def record_vote(
+        self,
+        poll_id: int,
+        user_id: int,
+        username: str,
+        question_id: int,
+        option_id: int | None,
+        question_type,
+    ) -> bool:
+        """Record a vote in both the in-memory cache and the database.
+
+        Returns True if the vote was new, False if the user already voted.
+        """
+        ...
+
 
 class RealBotAdapter(BotAdapter):
     """Production adapter — delegates to bridge_bot.bot internals."""
 
     def __init__(self):
         import bridge_bot.bot as _bot_mod
+        from bridge_bot.poll_orchestrator import send_poll, end_poll_and_send_results
         self._bot = _bot_mod.bot
         self._poll_state = _bot_mod.poll_state
-        self._send_poll = _bot_mod.send_poll
-        self._end_poll_and_send_results = _bot_mod.end_poll_and_send_results
-        self._channels = _bot_mod.available_channels
-        self._roles = _bot_mod.available_roles
+        self._send_poll = send_poll
+        self._end_poll_and_send_results = end_poll_and_send_results
+        self._ctx = _bot_mod.ctx
         self._bot_mod = _bot_mod
 
     async def send_poll(
@@ -104,6 +120,7 @@ class RealBotAdapter(BotAdapter):
         poll_type: str = 'poll',
     ) -> bool:
         return await self._send_poll(
+            self._ctx,
             question, options,
             channel_id=channel_id, role_ids=role_ids,
             max_votes_per_option=max_votes_per_option,
@@ -111,7 +128,7 @@ class RealBotAdapter(BotAdapter):
         )
 
     async def end_poll_and_send_results(self, poll_id: int) -> bool:
-        return await self._end_poll_and_send_results(poll_id)
+        return await self._end_poll_and_send_results(self._ctx, poll_id)
 
     def is_poll_active(self, poll_id: int) -> bool:
         return self._poll_state.is_active(poll_id)
@@ -133,12 +150,12 @@ class RealBotAdapter(BotAdapter):
         return ''
 
     def get_bot_start_time(self) -> Optional[datetime]:
-        return self._bot_mod.start_time
+        return self._ctx.start_time
 
     def list_channels(self) -> List[Dict[str, str]]:
         channels = [
             {"id": str(cid), "name": name}
-            for cid, name in self._channels.items()
+            for cid, name in self._ctx.available_channels.items()
         ]
         if not channels and self._bot.is_ready():
             for guild in self._bot.guilds:
@@ -150,7 +167,7 @@ class RealBotAdapter(BotAdapter):
     def list_roles(self) -> List[Dict[str, str]]:
         roles = [
             {"id": str(rid), "name": name}
-            for rid, name in self._roles.items()
+            for rid, name in self._ctx.available_roles.items()
         ]
         if not roles and self._bot.is_ready():
             for guild in self._bot.guilds:
@@ -170,6 +187,31 @@ class RealBotAdapter(BotAdapter):
     def get_event_loop(self):
         return self._bot.loop
 
+    def record_vote(
+        self,
+        poll_id: int,
+        user_id: int,
+        username: str,
+        question_id: int,
+        option_id: int | None,
+        question_type,
+    ) -> bool:
+        if not self._poll_state.record_vote(poll_id, user_id):
+            return False
+        from db.repository import add_vote as _db_add_vote
+        from bridge_bot.async_bridge import run_sync
+        try:
+            run_sync(_db_add_vote(
+                username=username,
+                user_id=user_id,
+                question_id=question_id,
+                option_id=option_id,
+                question_type=question_type,
+            ))
+        except Exception as e:
+            logger.error(f"Failed to persist vote to DB: {e}")
+        return True
+
 
 class StubBotAdapter(BotAdapter):
     """Test double — returns canned data, no Discord connection needed."""
@@ -178,6 +220,8 @@ class StubBotAdapter(BotAdapter):
         self._poll_active: Dict[int, bool] = {}
         self._send_poll_calls: List[dict] = []
         self._end_poll_calls: List[int] = []
+        self._record_vote_calls: List[dict] = []
+        self._user_votes: Dict[int, set] = {}
         self._channels: List[Dict[str, str]] = []
         self._roles: List[Dict[str, str]] = []
 
@@ -250,3 +294,26 @@ class StubBotAdapter(BotAdapter):
 
     def get_event_loop(self):
         return None
+
+    def record_vote(
+        self,
+        poll_id: int,
+        user_id: int,
+        username: str,
+        question_id: int,
+        option_id: int | None,
+        question_type,
+    ) -> bool:
+        voters = self._user_votes.setdefault(poll_id, set())
+        if user_id in voters:
+            return False
+        voters.add(user_id)
+        self._record_vote_calls.append({
+            "poll_id": poll_id,
+            "user_id": user_id,
+            "username": username,
+            "question_id": question_id,
+            "option_id": option_id,
+            "question_type": question_type,
+        })
+        return True

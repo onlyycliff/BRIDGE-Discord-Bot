@@ -92,11 +92,9 @@ The Vite dev server proxies API requests to Flask. The built SPA is served by Fl
 │   ├── session.py
 │   └── enums.py
 ├── alembic/             # Database migrations
-├── frontend/            # React dashboard SPA
+├── frontend/            # React dashboard SPA (Vite)
 ├── scripts/             # Utility scripts
 ├── docs/                # Documentation
-├── templates/           # Jinja2 templates
-├── static/              # Static assets (CSS, JS)
 ├── dashboard.py         # Flask application entry point
 ├── tests/               # Unit and integration tests
 ├── requirements.txt

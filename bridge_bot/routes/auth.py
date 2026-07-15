@@ -1,6 +1,4 @@
 import logging
-import time
-from collections import defaultdict
 
 from flask import Blueprint, jsonify, request
 from flask_login import login_user as flask_login_user, current_user
@@ -8,31 +6,20 @@ from werkzeug.security import check_password_hash
 
 from bridge_bot.auth import CoachUser
 from bridge_bot.async_bridge import run_sync as _run
+from bridge_bot.rate_limiter import RateLimiter
 from db.repository import get_coach_by_email
 
 logger = logging.getLogger(__name__)
 
 auth_bp = Blueprint('auth', __name__)
 
-_login_attempts: dict[str, list[float]] = defaultdict(list)
-_LOGIN_WINDOW = 300  # 5 minutes
-_LOGIN_MAX_ATTEMPTS = 10
-
-
-def _check_login_rate_limit(ip: str) -> bool:
-    now = time.time()
-    cutoff = now - _LOGIN_WINDOW
-    _login_attempts[ip] = [t for t in _login_attempts[ip] if t > cutoff]
-    if len(_login_attempts[ip]) >= _LOGIN_MAX_ATTEMPTS:
-        return False
-    _login_attempts[ip].append(now)
-    return True
+_login_rate_limiter = RateLimiter(window_seconds=300, max_hits=10)
 
 
 @auth_bp.route('/auth/login', methods=['POST'])
 def auth_login():
     ip = request.remote_addr or "unknown"
-    if not _check_login_rate_limit(ip):
+    if not _login_rate_limiter.allow(ip):
         logger.warning(f"Rate limited login attempt from {ip}")
         return jsonify({"error": "Too many login attempts. Please try again later."}), 429
 

@@ -52,9 +52,9 @@ def client():
 
 @pytest.fixture(autouse=True)
 def _reset_rate_limit():
-    validators._rate_limit_store.clear()
+    validators._message_rate_limiter.reset_all()
     yield
-    validators._rate_limit_store.clear()
+    validators._message_rate_limiter.reset_all()
 
 
 class TestCreatePollValidation:
