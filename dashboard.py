@@ -114,6 +114,10 @@ def create_app() -> Flask:
             )
         secret_key = os.urandom(24).hex()
     app.secret_key = secret_key
+    app.config.update(
+        SESSION_COOKIE_SAMESITE="None",
+        SESSION_COOKIE_SECURE=True,
+    )
 
     from flask_cors import CORS
     CORS(
