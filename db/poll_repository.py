@@ -180,7 +180,10 @@ class PollRepository:
                 selectinload(Form.questions)
                 .selectinload(Question.options)
                 .selectinload(Option.responses)
-                .selectinload(Response.option)
+                .selectinload(Response.option),
+                selectinload(Form.questions)
+                .selectinload(Question.responses)
+                .selectinload(Response.option),
             )
             .order_by(Form.id.desc())
         )
