@@ -12,7 +12,7 @@ implements the composite; StubBotAdapter provides test doubles.
 """
 
 from __future__ import annotations
-
+from bridge_bot.poll_state import poll_state
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -145,7 +145,7 @@ class RealBotAdapter(BotAdapter):
         import bridge_bot.bot as _bot_mod
         from bridge_bot.poll_orchestrator import send_poll, end_poll_and_send_results
         self._bot = _bot_mod.bot
-        self._poll_state = _bot_mod.poll_state
+        self._poll_state = poll_state
         self._send_poll = send_poll
         self._end_poll_and_send_results = end_poll_and_send_results
         self._ctx = _bot_mod.ctx
