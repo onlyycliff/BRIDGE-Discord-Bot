@@ -291,10 +291,14 @@ def _start_bot_thread() -> None:
     logging.getLogger(__name__).info("Bot thread started")
 
 
-if __name__ == "__main__":
-    if os.getenv("BOT_START", "").lower() in ("1", "true", "yes"):
-        _start_bot_thread()
+if os.getenv("BOT_START", "").lower() in ("1", "true", "yes"):
+    _start_bot_thread()
 
+
+# ---------------------------------------------------------------------------
+# CLI entry point for local `python dashboard.py` runs
+# ---------------------------------------------------------------------------
+if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
     logging.getLogger(__name__).info(
         f"Starting Flask dashboard on http://0.0.0.0:{port}"
