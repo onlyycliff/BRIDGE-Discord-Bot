@@ -26,7 +26,7 @@ type FormFields = {
   description: string
   channelId: string
   options: string[]
-  roleIds: number[]
+  roleIds: string[]
   maxVotes: string
 }
 
@@ -120,7 +120,7 @@ export function LiveControl() {
     })
   }
 
-  function toggleRole(id: number) {
+  function toggleRole(id: string) {
     setForm((f) => {
       const has = f.roleIds.includes(id)
       return {
@@ -150,7 +150,7 @@ export function LiveControl() {
         options: trimmedOpts,
       }
       if (form.description.trim()) payload.description = form.description.trim()
-      if (form.channelId) payload.channel_id = Number(form.channelId)
+      if (form.channelId) payload.channel_id = form.channelId
       if (form.roleIds.length > 0) payload.role_ids = form.roleIds
       if (form.maxVotes) payload.max_votes_per_option = Number(form.maxVotes)
 
@@ -258,10 +258,10 @@ export function LiveControl() {
                       <button
                         key={role.id}
                         type="button"
-                        aria-pressed={form.roleIds.includes(Number(role.id))}
-                        onClick={() => toggleRole(Number(role.id))}
+                        aria-pressed={form.roleIds.includes(role.id)}
+                        onClick={() => toggleRole(role.id)}
                         className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
-                          ${form.roleIds.includes(Number(role.id))
+                          ${form.roleIds.includes(role.id)
                             ? "border-transparent bg-primary text-primary-foreground shadow"
                             : "text-foreground"
                           }`}

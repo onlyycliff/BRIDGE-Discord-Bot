@@ -79,8 +79,8 @@ export interface CreatePollPayload {
   question: string
   description?: string
   options: string[]
-  channel_id?: number | null
-  role_ids?: number[]
+  channel_id?: string | null
+  role_ids?: string[]
   max_votes_per_option?: number | null
 }
 
