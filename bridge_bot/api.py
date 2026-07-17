@@ -6,7 +6,7 @@ from flask_login import current_user
 
 from bridge_bot.adapter import BotAdapter, StubBotAdapter
 from bridge_bot.async_bridge import run_sync as _run
-from bridge_bot.routes.polls import polls_bp, set_bot_adapter as set_polls_adapter
+from bridge_bot.routes.polls import polls_bp
 from bridge_bot.routes.tours import tours_bp
 from bridge_bot.routes.auth import auth_bp
 from db.repository import get_all_votes
@@ -35,11 +35,15 @@ def require_auth():
     return None
 
 
+def get_bot_adapter() -> BotAdapter:
+    """Return the current bot adapter instance."""
+    return _bot_adapter
+
+
 def set_bot_adapter(adapter: BotAdapter) -> None:
     """Called by dashboard.py after the bot thread starts."""
     global _bot_adapter
     _bot_adapter = adapter
-    set_polls_adapter(adapter)
 
 
 @api.route('/health', methods=['GET'])

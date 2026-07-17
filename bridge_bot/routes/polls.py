@@ -5,7 +5,6 @@ from datetime import datetime
 
 from flask import Blueprint, jsonify, request, send_file
 
-from bridge_bot.adapter import BotAdapter
 from bridge_bot.async_bridge import run_sync as _run
 from bridge_bot.validators import check_rate_limit, sanitize_mentions
 from db.repository import (
@@ -20,17 +19,13 @@ logger = logging.getLogger(__name__)
 
 polls_bp = Blueprint('polls', __name__)
 
-_bot_adapter: BotAdapter = None
-
-
-def set_bot_adapter(adapter: BotAdapter) -> None:
-    global _bot_adapter
-    _bot_adapter = adapter
-
 
 @polls_bp.route('/polls/create', methods=['POST'])
 def create_poll():
     try:
+        from bridge_bot.api import get_bot_adapter
+        _bot_adapter = get_bot_adapter()
+
         if not check_rate_limit('create_poll'):
             return jsonify({"error": "Rate limited. Please wait before creating another poll."}), 429
 
@@ -131,6 +126,9 @@ def create_poll():
 @polls_bp.route('/polls', methods=['GET'])
 def list_polls():
     try:
+        from bridge_bot.api import get_bot_adapter
+        _bot_adapter = get_bot_adapter()
+
         polls = _run(get_all_polls())
         for p in polls:
             p['active'] = _bot_adapter.is_poll_active(p.get('poll_id'))
@@ -143,6 +141,9 @@ def list_polls():
 @polls_bp.route('/polls/<int:poll_id>', methods=['GET'])
 def get_poll_detail(poll_id: int):
     try:
+        from bridge_bot.api import get_bot_adapter
+        _bot_adapter = get_bot_adapter()
+
         stats = _run(get_poll_stats(poll_id))
         if not stats:
             return jsonify({"error": "Poll not found"}), 404
@@ -170,6 +171,9 @@ def get_poll_detail(poll_id: int):
 @polls_bp.route('/polls/<int:poll_id>/end', methods=['POST'])
 def end_poll(poll_id: int):
     try:
+        from bridge_bot.api import get_bot_adapter
+        _bot_adapter = get_bot_adapter()
+
         data = request.get_json(silent=True) or {}
         send_results = data.get('send_results', False)
 
