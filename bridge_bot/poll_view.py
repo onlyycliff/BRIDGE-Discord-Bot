@@ -91,7 +91,7 @@ class PollView(View):
                 logger.warning(f"Vote limit reached - Option {choice} on poll {self.poll_id}")
                 return
 
-            if not poll_state.record_vote(self.poll_id, user_id):
+            if poll_state.has_voted(self.poll_id, user_id):
                 await interaction.response.send_message(
                     "\u274c You have already voted in this poll.",
                     ephemeral=True

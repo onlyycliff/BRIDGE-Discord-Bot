@@ -12,16 +12,9 @@ import discord
 from bridge_bot.context import BotContext
 from bridge_bot.embeds import build_poll_embed, build_results_embed
 from bridge_bot.poll_view import PollView
-from db.session import get_session
-from db.poll_repository import PollRepository
+from db.operations import poll_op as _poll_op
 
 logger = logging.getLogger(__name__)
-
-
-async def _poll_op(method_name, *args, **kwargs):
-    """Run a PollRepository method with an injected session."""
-    async with get_session() as session:
-        return await getattr(PollRepository(session), method_name)(*args, **kwargs)
 
 
 async def send_poll(
@@ -116,8 +109,8 @@ async def end_poll_and_send_results(ctx: BotContext, poll_id: int) -> bool:
     from bridge_bot.poll_state import poll_state
 
     try:
-        poll_state.end_poll(poll_id)
         await _poll_op("end_poll", poll_id)
+        poll_state.end_poll(poll_id)
 
         stats = await _poll_op("get_poll_stats", poll_id)
         if not stats:

@@ -5,18 +5,11 @@ import requests
 from flask import Blueprint, jsonify, request
 
 from bridge_bot.async_bridge import run_sync as _run
-from db.session import get_session
-from db.tour_repository import TourRepository
+from db.operations import tour_op as _tour_op
 
 logger = logging.getLogger(__name__)
 
 tours_bp = Blueprint('tours', __name__)
-
-
-async def _tour_op(method_name, *args, **kwargs):
-    """Run a TourRepository method with an injected session."""
-    async with get_session() as session:
-        return await getattr(TourRepository(session), method_name)(*args, **kwargs)
 
 
 @tours_bp.route('/tours', methods=['GET'])

@@ -138,19 +138,5 @@ def start_bot() -> None:
     bot.run(token)
 
 
-# Re-export for adapter.py (which accesses these via lazy import)
-# These will be removed when adapter.py is updated to use BotContext
-def __getattr__(name):
-    if name == "start_time":
-        return ctx.start_time
-    if name == "available_channels":
-        return channel_cache.channels
-    if name == "available_roles":
-        return channel_cache.roles
-    if name == "CHANNEL_ID":
-        return ctx.channel_id
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
 if __name__ == "__main__":
     start_bot()

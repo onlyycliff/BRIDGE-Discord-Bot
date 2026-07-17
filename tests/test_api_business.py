@@ -1,14 +1,11 @@
 """Tests for API business logic — poll creation, ending, and feedback validation."""
 
-import asyncio
-import concurrent.futures
 import pytest
 from flask import Flask
 from flask_login import LoginManager, UserMixin
 
 from bridge_bot.api import api, set_bot_adapter
 from bridge_bot.adapter import StubBotAdapter
-import bridge_bot.validators as validators
 
 
 class _TestUser(UserMixin):
@@ -52,9 +49,10 @@ def client():
 
 @pytest.fixture(autouse=True)
 def _reset_rate_limit():
-    validators._message_rate_limiter.reset_all()
+    from bridge_bot.routes.poll_create import _message_rate_limiter
+    _message_rate_limiter.reset_all()
     yield
-    validators._message_rate_limiter.reset_all()
+    _message_rate_limiter.reset_all()
 
 
 class TestCreatePollValidation:
@@ -91,16 +89,6 @@ class TestCreatePollValidation:
 
     def test_create_poll_sanitizes_mentions(self, client):
         c, adapter = client
-        loop = asyncio.new_event_loop()
-
-        def _run_schedule(coro):
-            result = loop.run_until_complete(coro)
-            f = concurrent.futures.Future()
-            f.set_result(result)
-            return f
-
-        adapter.schedule_coroutine = _run_schedule
-        adapter.get_event_loop = lambda: loop
         resp = c.post("/api/polls/create", json={
             "question": "Test @everyone blast",
             "options": ["A", "B"],
@@ -108,20 +96,9 @@ class TestCreatePollValidation:
         assert resp.status_code == 201
         call_args = adapter._send_poll_calls[-1]
         assert "\u200b@" in call_args["question"]
-        loop.close()
 
     def test_create_poll_deduplicates_options(self, client):
         c, adapter = client
-        loop = asyncio.new_event_loop()
-
-        def _run_schedule(coro):
-            result = loop.run_until_complete(coro)
-            f = concurrent.futures.Future()
-            f.set_result(result)
-            return f
-
-        adapter.schedule_coroutine = _run_schedule
-        adapter.get_event_loop = lambda: loop
         resp = c.post("/api/polls/create", json={
             "question": "Test?",
             "options": ["Same", "Same", "Different"],
@@ -129,7 +106,6 @@ class TestCreatePollValidation:
         assert resp.status_code == 201
         call_args = adapter._send_poll_calls[-1]
         assert len(call_args["options"]) == 2
-        loop.close()
 
     def test_create_poll_invalid_channel_id(self, client):
         c, _ = client

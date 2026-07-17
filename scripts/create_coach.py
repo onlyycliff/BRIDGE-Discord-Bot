@@ -20,8 +20,8 @@ from dotenv import load_dotenv
 load_dotenv(_root / ".env")
 
 from werkzeug.security import generate_password_hash
-from db.session import create_engine_from_url
-from db.repository import create_coach
+from db.session import get_session
+from db.coach_repository import CoachRepository
 
 
 async def main():
@@ -31,10 +31,11 @@ async def main():
     parser.add_argument("--name", default="Coach", help="Coach display name")
     args = parser.parse_args()
 
-    create_engine_from_url()
-
     pw_hash = generate_password_hash(args.password)
-    coach = await create_coach(email=args.email, password_hash=pw_hash, name=args.name)
+    async with get_session() as session:
+        coach = await CoachRepository(session).create_coach(
+            email=args.email, password_hash=pw_hash, name=args.name,
+        )
     print(f"Created coach: id={coach.id}, email={coach.email}, name={coach.name}")
 
 

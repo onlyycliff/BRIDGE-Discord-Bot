@@ -39,7 +39,7 @@ def pytest_collection_modifyitems(config, items):
 
 def _is_db_available() -> bool:
     try:
-        import asyncpg
+        import asyncpg  # noqa: F401
         return True
     except ImportError:
         return False

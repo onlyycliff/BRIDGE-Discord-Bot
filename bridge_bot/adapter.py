@@ -176,6 +176,15 @@ class RealBotAdapter(BotAdapter):
         return self._poll_state.is_active(poll_id)
 
     def end_poll_in_state(self, poll_id: int) -> bool:
+        from db.operations import poll_op
+        from bridge_bot.async_bridge import run_sync
+        try:
+            result = run_sync(poll_op("end_poll", poll_id))
+            if not result:
+                return False
+        except Exception as e:
+            logger.error(f"Failed to close poll {poll_id} in DB: {e}")
+            return False
         return self._poll_state.end_poll(poll_id)
 
     def is_bot_ready(self) -> bool:
@@ -327,14 +336,24 @@ class StubBotAdapter(BotAdapter):
 
     def schedule_coroutine(self, coro):
         import asyncio
+        import concurrent.futures
         loop = asyncio.new_event_loop()
+        f = concurrent.futures.Future()
         try:
-            return loop.run_until_complete(coro)
+            result = loop.run_until_complete(coro)
+            f.set_result(result)
+        except Exception as e:
+            f.set_exception(e)
         finally:
             loop.close()
+        return f
 
     def get_event_loop(self):
-        return None
+        import asyncio
+        try:
+            return asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.new_event_loop()
 
     def record_vote(
         self,

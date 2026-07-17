@@ -1,20 +1,24 @@
 """Poll create/end handlers."""
 
 import logging
+import re
 
 from flask import jsonify, request
 
-from bridge_bot.async_bridge import run_sync as _run
-from bridge_bot.validators import check_rate_limit, sanitize_mentions
-from db.session import get_session
-from db.poll_repository import PollRepository
+from bridge_bot.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
+_MENTION_PATTERN = re.compile(r'@(everyone|here)', re.IGNORECASE)
+_message_rate_limiter = RateLimiter(window_seconds=1.0, max_hits=1)
 
-async def _poll_op(method_name, *args, **kwargs):
-    async with get_session() as session:
-        return await getattr(PollRepository(session), method_name)(*args, **kwargs)
+
+def _check_rate_limit(key: str) -> bool:
+    return _message_rate_limiter.allow(key)
+
+
+def _sanitize_mentions(text: str) -> str:
+    return _MENTION_PATTERN.sub('\u200b@\\1', text)
 
 
 def register_create_end(polls_bp):
@@ -25,7 +29,7 @@ def register_create_end(polls_bp):
             from bridge_bot.api import get_bot_adapter
             _bot_adapter = get_bot_adapter()
 
-            if not check_rate_limit('create_poll'):
+            if not _check_rate_limit('create_poll'):
                 return jsonify({"error": "Rate limited. Please wait before creating another poll."}), 429
 
             data = request.get_json(silent=True)
@@ -41,8 +45,8 @@ def register_create_end(polls_bp):
             max_votes_per_option = data.get('max_votes_per_option')
             poll_type = data.get('poll_type', 'poll')
 
-            question = sanitize_mentions(question)
-            description = sanitize_mentions(description)
+            question = _sanitize_mentions(question)
+            description = _sanitize_mentions(description)
 
             if not question:
                 return jsonify({"error": "Question is required"}), 400
@@ -132,11 +136,6 @@ def register_create_end(polls_bp):
 
             if not _bot_adapter.end_poll_in_state(poll_id):
                 return jsonify({"error": "Poll not found or already ended"}), 404
-
-            try:
-                _run(_poll_op("end_poll", poll_id))
-            except Exception as e:
-                logger.error(f"Failed to close poll {poll_id} in DB: {e}")
 
             if send_results:
                 try:

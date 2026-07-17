@@ -5,15 +5,9 @@ import logging
 from flask import jsonify, request
 
 from bridge_bot.async_bridge import run_sync as _run
-from db.session import get_session
-from db.poll_repository import PollRepository
+from db.operations import poll_op as _poll_op
 
 logger = logging.getLogger(__name__)
-
-
-async def _poll_op(method_name, *args, **kwargs):
-    async with get_session() as session:
-        return await getattr(PollRepository(session), method_name)(*args, **kwargs)
 
 
 def register_votes(polls_bp):
