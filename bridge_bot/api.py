@@ -29,6 +29,8 @@ PUBLIC_ROUTES = {
 
 @api.before_request
 def require_auth():
+    if request.method == "OPTIONS":
+        return None
     if request.endpoint in PUBLIC_ROUTES:
         return None
     if not current_user.is_authenticated:
