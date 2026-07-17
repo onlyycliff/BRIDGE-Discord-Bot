@@ -9,7 +9,8 @@ from bridge_bot.async_bridge import run_sync as _run
 from bridge_bot.routes.polls import polls_bp
 from bridge_bot.routes.tours import tours_bp
 from bridge_bot.routes.auth import auth_bp
-from db.repository import get_all_votes
+from db.session import get_session
+from db.poll_repository import PollRepository
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,10 @@ def get_bot_status():
             minutes, seconds = divmod(remainder, 60)
             uptime_str = f"{hours}h {minutes}m {seconds}s"
 
-        all_votes = _run(get_all_votes())
+        async def _get_votes():
+            async with get_session() as session:
+                return await PollRepository(session).get_all_votes()
+        all_votes = _run(_get_votes())
         total_votes = len(all_votes)
 
         today = datetime.now().strftime("%Y-%m-%d")

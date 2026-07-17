@@ -10,16 +10,18 @@ from typing import List, Optional
 import discord
 
 from bridge_bot.context import BotContext
-from bridge_bot.embeds import INDIGO, build_poll_embed, build_results_embed
+from bridge_bot.embeds import build_poll_embed, build_results_embed
 from bridge_bot.poll_view import PollView
-from db.repository import (
-    add_poll_metadata,
-    end_poll,
-    get_poll_metadata,
-    get_poll_stats,
-)
+from db.session import get_session
+from db.poll_repository import PollRepository
 
 logger = logging.getLogger(__name__)
+
+
+async def _poll_op(method_name, *args, **kwargs):
+    """Run a PollRepository method with an injected session."""
+    async with get_session() as session:
+        return await getattr(PollRepository(session), method_name)(*args, **kwargs)
 
 
 async def send_poll(
@@ -32,8 +34,6 @@ async def send_poll(
     description: str = "",
     poll_type: str = "poll",
 ) -> bool:
-    bot: discord.ext.commands.Bot = ctx.bot
-
     try:
         target_channel_id = channel_id or ctx.channel_id
         if target_channel_id is None:
@@ -52,15 +52,12 @@ async def send_poll(
             logger.warning(f"Poll has {len(options)} options, limiting to 5")
             options = options[:5]
 
-        channel = bot.get_channel(target_channel_id)
+        channel = await ctx.channel_cache.resolve(target_channel_id)
         if not channel:
-            try:
-                channel = await bot.fetch_channel(target_channel_id)
-            except Exception:
-                logger.error(
-                    f"Poll channel not found (via fetch): {target_channel_id}"
-                )
-                return False
+            logger.error(
+                f"Poll channel not found: {target_channel_id}"
+            )
+            return False
 
         if role_ids:
             valid_roles = [
@@ -79,7 +76,8 @@ async def send_poll(
 
         try:
             guild_id = channel.guild.id if channel.guild else 0
-            result = await add_poll_metadata(
+            result = await _poll_op(
+                "add_poll_metadata",
                 poll_id=view.poll_id,
                 question=question,
                 options=list(options),
@@ -117,20 +115,18 @@ async def send_poll(
 async def end_poll_and_send_results(ctx: BotContext, poll_id: int) -> bool:
     from bridge_bot.poll_state import poll_state
 
-    bot: discord.ext.commands.Bot = ctx.bot
-
     try:
         poll_state.end_poll(poll_id)
-        await end_poll(poll_id)
+        await _poll_op("end_poll", poll_id)
 
-        stats = await get_poll_stats(poll_id)
+        stats = await _poll_op("get_poll_stats", poll_id)
         if not stats:
             logger.warning(
                 f"No stats found for poll {poll_id}, sending basic end message"
             )
             return False
 
-        meta = await get_poll_metadata(poll_id)
+        meta = await _poll_op("get_poll_metadata", poll_id)
         channel_id = meta.get("channel_id") if meta else None
 
         if not channel_id:
@@ -139,15 +135,12 @@ async def end_poll_and_send_results(ctx: BotContext, poll_id: int) -> bool:
             )
             return False
 
-        channel = bot.get_channel(channel_id)
+        channel = await ctx.channel_cache.resolve(channel_id)
         if not channel:
-            try:
-                channel = await bot.fetch_channel(channel_id)
-            except Exception:
-                logger.error(
-                    f"Channel {channel_id} not found for poll results"
-                )
-                return False
+            logger.error(
+                f"Channel {channel_id} not found for poll results"
+            )
+            return False
 
         embed = build_results_embed(
             question=stats.get("question", "Unknown Question"),

@@ -1,13 +1,18 @@
-"""BotAdapter — the seam between the API layer and the Discord bot.
+"""Adapter — focused interfaces between the API layer and the Discord bot.
 
-One interface, two adapters: RealBotAdapter (production) and StubBotAdapter (tests).
-The API layer depends only on this module. Deleting it would force api.py to
-inline all bot access — concentrating complexity in the wrong place.
+Five interfaces, each independently substitutable:
+  - PollAdapter: poll lifecycle (send, end, state)
+  - BotStatus: read-only bot state (ready, latency, avatar, start time)
+  - ChannelDirectory: channel and role listing (delegates to ChannelCache)
+  - EventLoopBridge: sync→async bridging (schedule coroutine, get loop)
+  - VoteRecorder: vote persistence (in-memory dedup + DB)
+
+BotAdapter is a composite ABC that extends all five. RealBotAdapter
+implements the composite; StubBotAdapter provides test doubles.
 """
 
 from __future__ import annotations
 
-import time
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -17,8 +22,12 @@ from typing import Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 
-class BotAdapter(ABC):
-    """Interface that api.py depends on. Each method is a deliberate seam."""
+# ---------------------------------------------------------------------------
+# Focused interfaces
+# ---------------------------------------------------------------------------
+
+class PollAdapter(ABC):
+    """Poll lifecycle: send, end, state queries."""
 
     @abstractmethod
     async def send_poll(
@@ -45,6 +54,10 @@ class BotAdapter(ABC):
     def end_poll_in_state(self, poll_id: int) -> bool:
         ...
 
+
+class BotStatus(ABC):
+    """Read-only bot state."""
+
     @abstractmethod
     def is_bot_ready(self) -> bool:
         ...
@@ -61,6 +74,10 @@ class BotAdapter(ABC):
     def get_bot_start_time(self) -> Optional[datetime]:
         ...
 
+
+class ChannelDirectory(ABC):
+    """Channel and role listing. Delegates to ChannelCache."""
+
     @abstractmethod
     def list_channels(self) -> List[Dict[str, str]]:
         ...
@@ -68,6 +85,10 @@ class BotAdapter(ABC):
     @abstractmethod
     def list_roles(self) -> List[Dict[str, str]]:
         ...
+
+
+class EventLoopBridge(ABC):
+    """Sync→async bridging for the Discord bot's event loop."""
 
     @abstractmethod
     def schedule_coroutine(self, coro) -> object:
@@ -78,6 +99,10 @@ class BotAdapter(ABC):
     def get_event_loop(self):
         """Return the bot's event loop, or None."""
         ...
+
+
+class VoteRecorder(ABC):
+    """Vote persistence: in-memory dedup + database write."""
 
     @abstractmethod
     def record_vote(
@@ -95,6 +120,23 @@ class BotAdapter(ABC):
         """
         ...
 
+
+# ---------------------------------------------------------------------------
+# Composite interface (backward compat)
+# ---------------------------------------------------------------------------
+
+class BotAdapter(PollAdapter, BotStatus, ChannelDirectory, EventLoopBridge, VoteRecorder):
+    """Composite ABC extending all five focused interfaces.
+
+    Existing code that depends on ``BotAdapter`` continues to work.
+    New code should depend on the specific interface it needs.
+    """
+    pass
+
+
+# ---------------------------------------------------------------------------
+# Production adapter (composite)
+# ---------------------------------------------------------------------------
 
 class RealBotAdapter(BotAdapter):
     """Production adapter — delegates to bridge_bot.bot internals."""
@@ -157,10 +199,6 @@ class RealBotAdapter(BotAdapter):
             {"id": str(cid), "name": name}
             for cid, name in self._ctx.available_channels.items()
         ]
-        if not channels and self._bot.is_ready():
-            for guild in self._bot.guilds:
-                for ch in guild.text_channels:
-                    channels.append({"id": str(ch.id), "name": ch.name})
         channels.sort(key=lambda c: c["name"])
         return channels
 
@@ -169,11 +207,6 @@ class RealBotAdapter(BotAdapter):
             {"id": str(rid), "name": name}
             for rid, name in self._ctx.available_roles.items()
         ]
-        if not roles and self._bot.is_ready():
-            for guild in self._bot.guilds:
-                for r in guild.roles:
-                    if not r.is_default():
-                        roles.append({"id": str(r.id), "name": r.name})
         roles.sort(key=lambda r: r["name"])
         return roles
 
@@ -198,20 +231,28 @@ class RealBotAdapter(BotAdapter):
     ) -> bool:
         if not self._poll_state.record_vote(poll_id, user_id):
             return False
-        from db.repository import add_vote as _db_add_vote
+        from db.session import get_session
+        from db.poll_repository import PollRepository
         from bridge_bot.async_bridge import run_sync
         try:
-            run_sync(_db_add_vote(
-                username=username,
-                user_id=user_id,
-                question_id=question_id,
-                option_id=option_id,
-                question_type=question_type,
-            ))
+            async def _add_vote():
+                async with get_session() as session:
+                    return await PollRepository(session).add_vote(
+                        username=username,
+                        user_id=user_id,
+                        question_id=question_id,
+                        option_id=option_id,
+                        question_type=question_type,
+                    )
+            run_sync(_add_vote())
         except Exception as e:
             logger.error(f"Failed to persist vote to DB: {e}")
         return True
 
+
+# ---------------------------------------------------------------------------
+# Test double (composite)
+# ---------------------------------------------------------------------------
 
 class StubBotAdapter(BotAdapter):
     """Test double — returns canned data, no Discord connection needed."""

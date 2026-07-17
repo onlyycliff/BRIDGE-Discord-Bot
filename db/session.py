@@ -1,20 +1,14 @@
 import os
-from pathlib import Path
 import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import (
     AsyncSession, async_sessionmaker, create_async_engine,
 )
 from sqlalchemy.pool import NullPool
 
 logger = logging.getLogger(__name__)
-
-_BASE = Path(__file__).resolve().parent.parent
-load_dotenv(_BASE / ".env")
-load_dotenv(_BASE / "bridge_bot" / ".env")
 
 _engine = None
 _async_session_factory = None

@@ -7,7 +7,6 @@ Poll orchestration lives in ``poll_orchestrator.py``; embeds in ``embeds.py``.
 import logging
 import os
 from datetime import datetime
-from typing import Optional
 
 import discord
 from discord.ext import commands
@@ -32,6 +31,7 @@ bot = commands.Bot(
 
 ctx = BotContext()
 channel_cache = ChannelCache()
+ctx.channel_cache = channel_cache
 
 RULES_CHANNEL_NAME = os.getenv(
     "RULES_CHANNEL_NAME", "\U0001f4dc\uff5crules"
@@ -45,23 +45,33 @@ async def on_ready():
     ctx.start_time = datetime.now()
     logger.info(f"Bridge Bot online as {bot.user}")
 
+    channel_cache.set_bot(bot)
     channel_cache.refresh(bot.guilds)
     ctx.available_channels = channel_cache.channels
     ctx.available_roles = channel_cache.roles
 
     try:
-        from db.repository import (
-            get_active_poll_ids,
-            is_poll_active_in_db,
-            has_user_voted_in_db,
-        )
+        from db.session import get_session
+        from db.poll_repository import PollRepository
         from bridge_bot.poll_state import poll_state
 
+        async def _get_active_poll_ids():
+            async with get_session() as session:
+                return await PollRepository(session).get_active_poll_ids()
+
+        async def _is_active(poll_id):
+            async with get_session() as session:
+                return await PollRepository(session).is_poll_active_in_db(poll_id)
+
+        async def _has_voted(poll_id, user_id):
+            async with get_session() as session:
+                return await PollRepository(session).has_user_voted_in_db(poll_id, user_id)
+
         poll_state.set_db_checkers(
-            is_active_fn=is_poll_active_in_db,
-            has_voted_fn=has_user_voted_in_db,
+            is_active_fn=_is_active,
+            has_voted_fn=_has_voted,
         )
-        active_ids = await get_active_poll_ids()
+        active_ids = await _get_active_poll_ids()
         poll_state.rehydrate(active_ids)
         logger.info(f"Rehydrated {len(active_ids)} active polls from DB")
     except Exception as e:

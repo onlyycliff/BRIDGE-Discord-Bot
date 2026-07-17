@@ -22,6 +22,11 @@ class CoachRepository:
         result = await self._s.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def get_coach_by_id(self, coach_id: int) -> Optional[Coach]:
+        stmt = select(Coach).where(Coach.id == coach_id)
+        result = await self._s.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def create_coach(
         self,
         email: str,

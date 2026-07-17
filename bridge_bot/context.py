@@ -21,3 +21,4 @@ class BotContext:
     available_channels: Dict[int, str] = field(default_factory=dict)
     available_roles: Dict[int, str] = field(default_factory=dict)
     rules_channel_name: str = "\U0001f4dc\uff5crules"
+    channel_cache: object = None  # ChannelCache — avoid import at module level

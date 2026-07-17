@@ -5,22 +5,24 @@ import requests
 from flask import Blueprint, jsonify, request
 
 from bridge_bot.async_bridge import run_sync as _run
-from db.repository import (
-    get_all_tours,
-    get_tour,
-    get_tour_feedback,
-    submit_tour_feedback,
-)
+from db.session import get_session
+from db.tour_repository import TourRepository
 
 logger = logging.getLogger(__name__)
 
 tours_bp = Blueprint('tours', __name__)
 
 
+async def _tour_op(method_name, *args, **kwargs):
+    """Run a TourRepository method with an injected session."""
+    async with get_session() as session:
+        return await getattr(TourRepository(session), method_name)(*args, **kwargs)
+
+
 @tours_bp.route('/tours', methods=['GET'])
 def list_tours():
     try:
-        tours = _run(get_all_tours())
+        tours = _run(_tour_op("get_all_tours"))
         return jsonify(tours), 200
     except Exception as e:
         logger.error(f"Error listing tours: {e}")
@@ -30,7 +32,7 @@ def list_tours():
 @tours_bp.route('/tours/<int:tour_id>', methods=['GET'])
 def get_tour_detail(tour_id: int):
     try:
-        tour = _run(get_tour(tour_id))
+        tour = _run(_tour_op("get_tour", tour_id))
         if not tour:
             return jsonify({"error": "Tour not found"}), 404
         return jsonify({
@@ -47,7 +49,7 @@ def get_tour_detail(tour_id: int):
 @tours_bp.route('/tours/<int:tour_id>/feedback', methods=['GET'])
 def get_tour_feedback_route(tour_id: int):
     try:
-        feedback = _run(get_tour_feedback(tour_id))
+        feedback = _run(_tour_op("get_tour_feedback", tour_id))
         return jsonify({
             "tour_id": tour_id,
             "feedback": feedback,
@@ -87,7 +89,8 @@ def submit_feedback():
             except (ValueError, TypeError):
                 return jsonify({"error": "Invalid rating"}), 400
 
-        fb = _run(submit_tour_feedback(
+        fb = _run(_tour_op(
+            "submit_tour_feedback",
             tour_id=tour_id,
             student_id=int(student_id),
             student_name=student_name or "Anonymous",

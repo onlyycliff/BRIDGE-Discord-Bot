@@ -7,7 +7,8 @@ from werkzeug.security import check_password_hash
 from bridge_bot.auth import CoachUser
 from bridge_bot.async_bridge import run_sync as _run
 from bridge_bot.rate_limiter import RateLimiter
-from db.repository import get_coach_by_email
+from db.session import get_session
+from db.coach_repository import CoachRepository
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,10 @@ def auth_login():
         return jsonify({"error": "Email and password are required"}), 400
 
     try:
-        coach = _run(get_coach_by_email(email))
+        async def _get_coach():
+            async with get_session() as session:
+                return await CoachRepository(session).get_coach_by_email(email)
+        coach = _run(_get_coach())
         if not coach or not check_password_hash(coach.password_hash, password):
             return jsonify({"error": "Invalid email or password"}), 401
 

@@ -137,18 +137,13 @@ def create_app() -> Flask:
 
     @login_manager.user_loader
     def load_coach(coach_id: str):
-        from sqlalchemy import select
-        from db.session import get_factory
-        from db.models import Coach as CoachModel
+        from db.session import get_session
+        from db.coach_repository import CoachRepository
         from bridge_bot.async_bridge import run_sync
         try:
-            factory = get_factory()
-
             async def _load():
-                async with factory() as session:
-                    stmt = select(CoachModel).where(CoachModel.id == int(coach_id))
-                    result = await session.execute(stmt)
-                    return result.scalar_one_or_none()
+                async with get_session() as session:
+                    return await CoachRepository(session).get_coach_by_id(int(coach_id))
 
             coach = run_sync(_load())
             if coach is None:
