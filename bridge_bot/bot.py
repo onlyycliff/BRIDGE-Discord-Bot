@@ -46,7 +46,7 @@ async def on_ready():
     logger.info(f"Bridge Bot online as {bot.user}")
 
     channel_cache.set_bot(bot)
-    channel_cache.refresh(bot.guilds)
+    await channel_cache.refresh(bot.guilds)
     ctx.available_channels = channel_cache.channels
     ctx.available_roles = channel_cache.roles
 

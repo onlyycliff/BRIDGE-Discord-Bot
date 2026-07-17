@@ -15,6 +15,9 @@ class FakeGuild:
         self.text_channels = channels or []
         self.roles = roles or []
 
+    async def fetch_channels(self):
+        pass
+
 
 class FakeRole:
     def __init__(self, id, name, default=False):
@@ -41,23 +44,25 @@ class FakeBot:
 
 
 class TestChannelCacheRefresh:
-    def test_populates_channels_and_roles(self):
+    @pytest.mark.asyncio
+    async def test_populates_channels_and_roles(self):
         cache = ChannelCache()
         ch = FakeChannel(111, "general")
         role = FakeRole(222, "Coach")
         default_role = FakeRole(333, "@everyone", default=True)
         guild = FakeGuild(channels=[ch], roles=[role, default_role])
 
-        cache.refresh([guild])
+        await cache.refresh([guild])
 
         assert cache.channels == {111: "general"}
         assert cache.roles == {222: "Coach"}
         assert 333 not in cache.roles
 
-    def test_clears_on_refresh(self):
+    @pytest.mark.asyncio
+    async def test_clears_on_refresh(self):
         cache = ChannelCache()
         cache.channels = {999: "old"}
-        cache.refresh([])
+        await cache.refresh([])
         assert cache.channels == {}
 
 
@@ -88,7 +93,7 @@ class TestChannelCacheResolve:
         ch = FakeChannel(111, "general")
         bot = FakeBot(channels=[ch])
         cache.set_bot(bot)
-        cache.refresh([FakeGuild(channels=[ch])])
+        await cache.refresh([FakeGuild(channels=[ch])])
 
         result = await cache.resolve(111)
         assert result is ch

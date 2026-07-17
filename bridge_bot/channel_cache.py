@@ -30,11 +30,16 @@ class ChannelCache:
         """Inject the Discord bot for API fallback in resolve()."""
         self._bot = bot
 
-    def refresh(self, guilds) -> None:
-        """Rebuild the cache from the bot's guild list."""
+    async def refresh(self, guilds) -> None:
+        """Rebuild the cache from the bot's guild list.
+
+        Calls ``guild.fetch_channels()`` to force a full channel list
+        from the Discord API before caching, avoiding lazy-load gaps.
+        """
         self.channels.clear()
         self.roles.clear()
         for guild in guilds:
+            await guild.fetch_channels()
             for ch in guild.text_channels:
                 self.channels[ch.id] = ch.name
             for r in guild.roles:
