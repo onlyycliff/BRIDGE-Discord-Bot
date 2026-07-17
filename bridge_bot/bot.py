@@ -13,7 +13,7 @@ from discord.ext import commands
 from dotenv import load_dotenv
 
 from bridge_bot.channel_cache import ChannelCache
-from bridge_bot.context import BotContext
+from bridge_bot.context import BotContext, populate_from_cache
 from bridge_bot.embeds import build_rules_embed
 
 logger = logging.getLogger(__name__)
@@ -47,8 +47,7 @@ async def on_ready():
 
     channel_cache.set_bot(bot)
     await channel_cache.refresh(bot.guilds)
-    ctx.available_channels = channel_cache.channels
-    ctx.available_roles = channel_cache.roles
+    populate_from_cache(ctx, channel_cache)
 
     try:
         from db.session import get_session

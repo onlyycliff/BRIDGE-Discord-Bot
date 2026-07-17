@@ -22,3 +22,15 @@ class BotContext:
     available_roles: Dict[int, str] = field(default_factory=dict)
     rules_channel_name: str = "\U0001f4dc\uff5crules"
     channel_cache: object = None  # ChannelCache — avoid import at module level
+
+
+def populate_from_cache(ctx: "BotContext", cache: object) -> None:
+    """Copy channels and roles from *cache* into *ctx* in place.
+
+    Mutates the existing dicts so that any previously captured references
+    (e.g. by RealBotAdapter) continue to see updated data.
+    """
+    ctx.available_channels.clear()
+    ctx.available_channels.update(cache.channels)
+    ctx.available_roles.clear()
+    ctx.available_roles.update(cache.roles)
