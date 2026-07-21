@@ -12,6 +12,7 @@ import { VoteLog } from "@/pages/VoteLog"
 import { BotStatus } from "@/pages/BotStatus"
 import { WorkshopSchedule } from "@/pages/WorkshopSchedule"
 import { LiveControl } from "@/pages/LiveControl"
+import { TourCreate } from "@/pages/TourCreate"
 
 function AnimatedPage({ children }: { children: React.ReactNode }) {
   const prefersReduced = useReducedMotion()
@@ -49,6 +50,7 @@ function DashboardRoutes() {
             <Route path="/bot-status" element={<BotStatus />} />
             <Route path="/schedule" element={<WorkshopSchedule />} />
             <Route path="/live-control" element={<LiveControl />} />
+            <Route path="/tours" element={<TourCreate />} />
             <Route path="*" element={<Navigate to="/polls" replace />} />
           </Routes>
         </AnimatedPage>

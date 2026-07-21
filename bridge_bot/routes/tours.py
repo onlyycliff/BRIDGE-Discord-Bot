@@ -1,5 +1,6 @@
 import logging
 import os
+from datetime import datetime
 
 import requests
 from flask import Blueprint, jsonify, request
@@ -22,6 +23,59 @@ def list_tours():
         return jsonify({"error": str(e)}), 500
 
 
+@tours_bp.route('/tours', methods=['POST'])
+def create_tour():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON data provided"}), 400
+
+        name = data.get('name', '').strip()
+        date_str = data.get('date', '').strip()
+        company = data.get('company', '').strip()
+
+        if not name:
+            return jsonify({"error": "name is required"}), 400
+        if not date_str:
+            return jsonify({"error": "date is required"}), 400
+        if not company:
+            return jsonify({"error": "company is required"}), 400
+
+        try:
+            date = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+        except ValueError:
+            return jsonify({"error": "Invalid date format. Use ISO 8601 (e.g. 2026-07-29)"}), 400
+
+        from bridge_bot.forms.google_forms_client import create_tour_feedback_form
+        try:
+            form_result = _run(create_tour_feedback_form(name))
+        except Exception as e:
+            logger.error(f"Google Form creation failed for tour '{name}': {e}")
+            return jsonify({"error": f"Failed to create feedback form: {e}"}), 502
+
+        tour = _run(_tour_op(
+            "create_tour",
+            name=name,
+            date=date,
+            company=company,
+            google_form_url=form_result["form_url"],
+            google_sheet_id=form_result["sheet_id"],
+        ))
+
+        return jsonify({
+            "id": tour.id,
+            "name": tour.name,
+            "company": tour.company,
+            "date": str(tour.date) if tour.date else None,
+            "google_form_url": tour.google_form_url,
+            "google_sheet_id": tour.google_sheet_id,
+        }), 201
+
+    except Exception as e:
+        logger.error(f"Error creating tour: {e}", exc_info=True)
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
+
+
 @tours_bp.route('/tours/<int:tour_id>', methods=['GET'])
 def get_tour_detail(tour_id: int):
     try:
@@ -33,10 +87,53 @@ def get_tour_detail(tour_id: int):
             "name": tour.name,
             "company": tour.company,
             "date": str(tour.date) if tour.date else None,
+            "google_form_url": tour.google_form_url,
+            "google_sheet_id": tour.google_sheet_id,
         }), 200
     except Exception as e:
         logger.error(f"Error getting tour: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+@tours_bp.route('/tours/<int:tour_id>/send-to-discord', methods=['POST'])
+def send_tour_to_discord(tour_id: int):
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON data provided"}), 400
+
+        channel_id = data.get('channel_id')
+        if not channel_id:
+            return jsonify({"error": "channel_id is required"}), 400
+
+        try:
+            channel_id = int(channel_id)
+        except (ValueError, TypeError):
+            return jsonify({"error": "Invalid channel_id"}), 400
+
+        tour = _run(_tour_op("get_tour", tour_id))
+        if not tour:
+            return jsonify({"error": "Tour not found"}), 404
+        if not tour.google_form_url:
+            return jsonify({"error": "Tour has no feedback form linked"}), 400
+
+        from bridge_bot.api import get_bot_adapter
+        adapter = get_bot_adapter()
+        success = _run(adapter.send_tour_feedback_link(
+            tour_id=tour_id,
+            tour_name=tour.name,
+            form_url=tour.google_form_url,
+            channel_id=channel_id,
+        ))
+
+        if not success:
+            return jsonify({"error": "Failed to send message to Discord"}), 502
+
+        return jsonify({"success": True}), 200
+
+    except Exception as e:
+        logger.error(f"Error sending tour to Discord: {e}", exc_info=True)
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 
 @tours_bp.route('/tours/<int:tour_id>/feedback', methods=['GET'])

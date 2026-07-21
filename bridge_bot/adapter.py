@@ -121,12 +121,30 @@ class VoteRecorder(ABC):
         ...
 
 
+class TourFeedbackSender(ABC):
+    """Tour feedback: send form link to Discord."""
+
+    @abstractmethod
+    async def send_tour_feedback_link(
+        self,
+        tour_id: int,
+        tour_name: str,
+        form_url: str,
+        channel_id: int,
+    ) -> bool:
+        """Send a tour feedback form link to a Discord channel.
+
+        Returns True on success.
+        """
+        ...
+
+
 # ---------------------------------------------------------------------------
 # Composite interface (backward compat)
 # ---------------------------------------------------------------------------
 
-class BotAdapter(PollAdapter, BotStatus, ChannelDirectory, EventLoopBridge, VoteRecorder):
-    """Composite ABC extending all five focused interfaces.
+class BotAdapter(PollAdapter, BotStatus, ChannelDirectory, EventLoopBridge, VoteRecorder, TourFeedbackSender):
+    """Composite ABC extending all focused interfaces.
 
     Existing code that depends on ``BotAdapter`` continues to work.
     New code should depend on the specific interface it needs.
@@ -258,6 +276,27 @@ class RealBotAdapter(BotAdapter):
             logger.error(f"Failed to persist vote to DB: {e}")
         return True
 
+    async def send_tour_feedback_link(
+        self,
+        tour_id: int,
+        tour_name: str,
+        form_url: str,
+        channel_id: int,
+    ) -> bool:
+        from bridge_bot.embeds import build_tour_feedback_embed
+        try:
+            channel = self._bot.get_channel(channel_id)
+            if not channel:
+                logger.error(f"Discord channel {channel_id} not found")
+                return False
+            embed = build_tour_feedback_embed(tour_name, form_url)
+            await channel.send(embed=embed)
+            logger.info(f"Tour feedback link sent to channel {channel_id} for tour {tour_name}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to send tour feedback link: {e}")
+            return False
+
 
 # ---------------------------------------------------------------------------
 # Test double (composite)
@@ -271,6 +310,7 @@ class StubBotAdapter(BotAdapter):
         self._send_poll_calls: List[dict] = []
         self._end_poll_calls: List[int] = []
         self._record_vote_calls: List[dict] = []
+        self._send_tour_feedback_calls: List[dict] = []
         self._user_votes: Dict[int, set] = {}
         self._channels: List[Dict[str, str]] = []
         self._roles: List[Dict[str, str]] = []
@@ -375,5 +415,20 @@ class StubBotAdapter(BotAdapter):
             "question_id": question_id,
             "option_id": option_id,
             "question_type": question_type,
+        })
+        return True
+
+    async def send_tour_feedback_link(
+        self,
+        tour_id: int,
+        tour_name: str,
+        form_url: str,
+        channel_id: int,
+    ) -> bool:
+        self._send_tour_feedback_calls.append({
+            "tour_id": tour_id,
+            "tour_name": tour_name,
+            "form_url": form_url,
+            "channel_id": channel_id,
         })
         return True

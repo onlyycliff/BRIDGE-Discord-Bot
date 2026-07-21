@@ -94,6 +94,9 @@ export interface Tour {
   name: string
   company: string
   date: string | null
+  google_form_url?: string | null
+  google_sheet_id?: string | null
+  feedback_count?: number
 }
 
 export interface FeedbackSubmitPayload {
@@ -102,4 +105,19 @@ export interface FeedbackSubmitPayload {
   student_id: number
   rating: number | null
   comments: string | null
+}
+
+export interface CreateTourPayload {
+  name: string
+  date: string
+  company: string
+}
+
+export interface CreateTourResponse {
+  id: number
+  name: string
+  company: string
+  date: string | null
+  google_form_url: string | null
+  google_sheet_id: string | null
 }

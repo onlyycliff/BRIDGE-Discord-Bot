@@ -66,6 +66,25 @@ def build_results_embed(
     return embed
 
 
+def build_tour_feedback_embed(
+    tour_name: str,
+    form_url: str,
+) -> discord.Embed:
+    embed = discord.Embed(
+        title=f"\U0001f3eb {tour_name} \u2014 Feedback",
+        description=(
+            f"Please share your feedback about the **{tour_name}** industry tour.\n\n"
+            f"\U0001f449 [**Click here to fill out the feedback form**]({form_url})"
+        ),
+        color=INDIGO,
+    )
+    embed.set_footer(
+        text="BRIDGE 2026 VII \u2022 Summer Program \u2022 \U0001f517 View on Dashboard"
+    )
+    embed.timestamp = datetime.now()
+    return embed
+
+
 def build_rules_embed() -> discord.Embed:
     embed = discord.Embed(
         title="\u2726 Bridge 2026 Community Guidelines \u2726",

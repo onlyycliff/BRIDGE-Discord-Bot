@@ -24,12 +24,16 @@ class TourRepository:
         name: str,
         date,
         company: str,
+        google_form_url: Optional[str] = None,
+        google_sheet_id: Optional[str] = None,
     ) -> IndustryTour:
         tour = IndustryTour(
             id=int(time.time() * 1000),
             name=name,
             date=date,
             company=company,
+            google_form_url=google_form_url,
+            google_sheet_id=google_sheet_id,
         )
         self._s.add(tour)
         await self._s.flush()
@@ -55,6 +59,8 @@ class TourRepository:
                 "name": t.name,
                 "date": str(t.date),
                 "company": t.company,
+                "google_form_url": t.google_form_url,
+                "google_sheet_id": t.google_sheet_id,
                 "feedback_count": len(t.feedback),
             }
             for t in tours

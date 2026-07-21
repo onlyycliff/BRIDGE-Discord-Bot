@@ -126,6 +126,8 @@ class IndustryTour(Base):
     name = Column(String(200), nullable=False)
     date = Column(DateTime(timezone=True), nullable=False)
     company = Column(String(200), nullable=False)
+    google_form_url = Column(String(500), nullable=True)
+    google_sheet_id = Column(String(200), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     feedback = relationship(

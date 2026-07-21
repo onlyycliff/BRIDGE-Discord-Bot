@@ -10,6 +10,7 @@ const navItems = [
   { path: "/bot-status", label: "Status" },
   { path: "/schedule", label: "Schedule" },
   { path: "/live-control", label: "Control" },
+  { path: "/tours", label: "Tours" },
 ]
 
 export function NavBar() {
