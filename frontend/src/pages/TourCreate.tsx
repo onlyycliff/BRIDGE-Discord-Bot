@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react"
+import { motion, AnimatePresence } from "framer-motion"
 import { api } from "@/api/client"
 import type { Tour, CreateTourPayload, CreateTourResponse, DiscordChannel } from "@/api/types"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Send, Copy, Check, ExternalLink } from "lucide-react"
+import { Send, Copy, Check, ExternalLink, MapPin } from "lucide-react"
 
 type ToursState =
   | { status: "loading" }
@@ -23,6 +24,15 @@ const initialForm: FormFields = {
   name: "",
   date: "",
   company: "",
+}
+
+const cardVariants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: { delay: i * 0.06, duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] },
+  }),
 }
 
 export function TourCreate() {
@@ -126,11 +136,14 @@ export function TourCreate() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold font-display">Tour Management</h1>
-        <Button variant="outline" size="sm" onClick={fetchTours}>
-          Refresh
-        </Button>
+      <div className="space-y-1">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tours</p>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold font-display">Tour Management</h1>
+          <Button variant="outline" size="sm" onClick={fetchTours}>
+            Refresh
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -186,53 +199,60 @@ export function TourCreate() {
                 {submitting ? "Creating..." : "Create Feedback Form"}
               </Button>
 
-              {result && (
-                <div className="space-y-3">
-                  <p className={`text-sm ${result.ok ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}>
-                    {result.message}
-                  </p>
+              <AnimatePresence mode="wait">
+                {result && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="space-y-3 overflow-hidden"
+                  >
+                    <p className={`text-sm ${result.ok ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}>
+                      {result.message}
+                    </p>
 
-                  {result.ok && result.tour?.google_form_url && (
-                    <div className="rounded-lg border p-3 space-y-3">
-                      <div className="flex items-center gap-2">
-                        <a
-                          href={result.tour.google_form_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm font-medium text-primary hover:underline flex items-center gap-1 flex-1 min-w-0 truncate"
-                        >
-                          <ExternalLink className="h-4 w-4 shrink-0" />
-                          {result.tour.google_form_url}
-                        </a>
-                        <Button variant="ghost" size="icon" onClick={copyFormUrl} aria-label="Copy form URL">
-                          {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
-                        </Button>
-                      </div>
+                    {result.ok && result.tour?.google_form_url && (
+                      <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <a
+                            href={result.tour.google_form_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm font-medium text-primary hover:underline flex items-center gap-1 flex-1 min-w-0 truncate"
+                          >
+                            <ExternalLink className="h-4 w-4 shrink-0" />
+                            {result.tour.google_form_url}
+                          </a>
+                          <Button variant="ghost" size="icon" onClick={copyFormUrl} aria-label="Copy form URL">
+                            {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+                          </Button>
+                        </div>
 
-                      <div className="flex gap-2">
-                        <select
-                          value={selectedChannel}
-                          onChange={(e) => setSelectedChannel(e.target.value)}
-                          className="flex h-9 flex-1 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                        >
-                          <option value="">Select channel</option>
-                          {channels.map((ch) => (
-                            <option key={ch.id} value={ch.id}>{ch.name}</option>
-                          ))}
-                        </select>
-                        <Button
-                          size="sm"
-                          disabled={!selectedChannel || sending}
-                          onClick={handleSendToDiscord}
-                        >
-                          <Send className="mr-1 h-3 w-3" />
-                          {sending ? "Sending..." : "Send to Discord"}
-                        </Button>
+                        <div className="flex gap-2">
+                          <select
+                            value={selectedChannel}
+                            onChange={(e) => setSelectedChannel(e.target.value)}
+                            className="flex h-9 flex-1 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          >
+                            <option value="">Select channel</option>
+                            {channels.map((ch) => (
+                              <option key={ch.id} value={ch.id}>{ch.name}</option>
+                            ))}
+                          </select>
+                          <Button
+                            size="sm"
+                            disabled={!selectedChannel || sending}
+                            onClick={handleSendToDiscord}
+                          >
+                            <Send className="mr-1 h-3 w-3" />
+                            {sending ? "Sending..." : "Send to Discord"}
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              )}
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </form>
           </CardContent>
         </Card>
@@ -262,41 +282,51 @@ export function TourCreate() {
               <p className="text-sm text-destructive">{toursState.message}</p>
             )}
             {toursState.status === "empty" && (
-              <p className="text-sm text-muted-foreground">No tours yet. Create one to get started.</p>
+              <div className="flex flex-col items-center gap-2 py-8 text-center">
+                <MapPin className="h-8 w-8 text-muted-foreground/50" />
+                <p className="text-sm text-muted-foreground">No tours yet. Create one to start collecting feedback.</p>
+              </div>
             )}
             {toursState.status === "loaded" && (
               <div className="space-y-3">
-                {toursState.tours.map((tour) => (
-                  <div
-                    key={tour.id}
-                    className="rounded-lg border p-3 hover:bg-accent/50 transition-colors"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium leading-snug">{tour.name}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {tour.company} {tour.date ? `\u2022 ${tour.date}` : ""}
-                        </p>
-                        {tour.google_form_url && (
-                          <a
-                            href={tour.google_form_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-primary hover:underline flex items-center gap-1 mt-1"
-                          >
-                            <ExternalLink className="h-3 w-3" />
-                            Feedback Form
-                          </a>
+                <AnimatePresence>
+                  {toursState.tours.map((tour, i) => (
+                    <motion.div
+                      key={tour.id}
+                      custom={i}
+                      variants={cardVariants}
+                      initial="hidden"
+                      animate="visible"
+                      layout
+                      className="rounded-lg border-l-2 border border-l-primary/60 bg-gradient-to-r from-primary/5 to-transparent p-3 transition-colors hover:from-primary/8"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium leading-snug">{tour.name}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {tour.company} {tour.date ? `\u2022 ${tour.date}` : ""}
+                          </p>
+                          {tour.google_form_url && (
+                            <a
+                              href={tour.google_form_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-primary hover:underline flex items-center gap-1 mt-1.5"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                              Feedback Form
+                            </a>
+                          )}
+                        </div>
+                        {tour.feedback_count !== undefined && (
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">
+                            {tour.feedback_count} response{tour.feedback_count !== 1 ? "s" : ""}
+                          </span>
                         )}
                       </div>
-                      {tour.feedback_count !== undefined && (
-                        <span className="text-xs text-muted-foreground whitespace-nowrap">
-                          {tour.feedback_count} response{tour.feedback_count !== 1 ? "s" : ""}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
               </div>
             )}
           </CardContent>
